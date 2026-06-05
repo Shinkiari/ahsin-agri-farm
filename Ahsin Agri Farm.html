@@ -1247,6 +1247,20 @@ input[readonly]{opacity:.65;cursor:not-allowed;}
     </div>
     <button class="lock-btn" onclick="checkLock()">🔓 Login to Farm Database</button>
     <div class="lock-error" id="lock-error">❌ Galat ID ya Password — dobara try karein</div>
+
+    <!-- Restore after login -->
+    <div id="lock-restore-box" style="display:none;margin-top:16px;padding:14px 16px;background:rgba(82,183,136,0.07);border:1px dashed rgba(82,183,136,0.3);border-radius:12px;">
+      <div style="font-size:12px;color:#74c69d;font-weight:700;margin-bottom:10px;">📂 Data Restore Karen (Dusri Device Ke Liye)</div>
+      <div style="font-size:11px;color:#4a7a5a;margin-bottom:10px;line-height:1.6;">Agar aap pehli baar is device par hain ya data nahi dikh raha, apna backup JSON file yahan upload karen.</div>
+      <label style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:linear-gradient(135deg,#2d6a4f,#40916c);border:1px solid #52b788;border-radius:9px;cursor:pointer;color:#f8f5ee;font-size:12.5px;font-weight:700;justify-content:center;">
+        ⬆ Backup File Upload Karen
+        <input type="file" accept=".json" onchange="lockScreenRestore(event)" style="display:none">
+      </label>
+    </div>
+
+    <div style="text-align:center;margin-top:14px;">
+      <span onclick="toggleLockRestore()" style="font-size:11px;color:#3a6a4a;cursor:pointer;text-decoration:underline;">📱 Dusri Device Par Hain? Data Restore Karen</span>
+    </div>
     <div class="lock-footer">🔒 Protected System — Sirf Authorized Users</div>
   </div>
 </div>
@@ -1276,6 +1290,47 @@ input[readonly]{opacity:.65;cursor:not-allowed;}
   });
 })();
 
+function toggleLockRestore(){
+  var box = document.getElementById('lock-restore-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function lockScreenRestore(event){
+  var file = event.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var data = JSON.parse(e.target.result);
+      // Store keys
+      var keyMap = {
+        lettuce:'aaf_lettuce', fumigation:'aaf_fumigation',
+        qar:'aaf_qar', invoice:'aaf_invoice',
+        trash:'aaf_trash', rateHistory:'aaf_rate_history',
+        basketReturn:'aaf_basket_return', farms:'aaf_farms'
+      };
+      Object.keys(keyMap).forEach(function(k){
+        if(data[k]) localStorage.setItem(keyMap[k], JSON.stringify(data[k]));
+      });
+      if(data.wqtr_reports) localStorage.setItem('wqtr_reports', JSON.stringify(data.wqtr_reports));
+      if(data.wqtr_farms)   localStorage.setItem('wqtr_farms',   JSON.stringify(data.wqtr_farms));
+      document.getElementById('lock-restore-box').innerHTML = '<div style="text-align:center;padding:8px;color:#74c69d;font-weight:700;font-size:13px;">✅ Data Restore Ho Gaya! Ab Login Karen.</div>';
+    } catch(err){
+      alert('❌ File sahi nahi hai. JSON backup file upload karen.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function logoutApp(){
+  if(!confirm('Logout karna chahte hain? Backup automatically download ho gi.')) return;
+  downloadBackup();
+  setTimeout(function(){
+    sessionStorage.removeItem('agri_auth');
+    location.reload();
+  }, 800);
+}
+
 function checkLock(){
   var id   = document.getElementById('lock-id').value.trim();
   var pass = document.getElementById('lock-pass').value;
@@ -1286,7 +1341,12 @@ function checkLock(){
     var overlay = document.getElementById('lock-overlay');
     overlay.style.transition = 'opacity 0.5s ease';
     overlay.style.opacity = '0';
-    setTimeout(function(){ overlay.classList.add('hidden'); overlay.style.opacity=''; }, 500);
+    setTimeout(function(){
+      overlay.classList.add('hidden');
+      overlay.style.opacity='';
+      // ☁️ Pull latest data from Firebase after login
+      if(typeof fbSyncFromCloud==='function') fbSyncFromCloud();
+    }, 500);
   } else {
     err.classList.add('visible');
     err.style.animation='none';
@@ -1295,6 +1355,87 @@ function checkLock(){
     document.getElementById('lock-pass').focus();
   }
 }
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════
+// ☁️  FIREBASE CLOUD SYNC ENGINE
+// ═══════════════════════════════════════════════════
+const FB_DB   = 'https://ahsin-agri-farm-default-rtdb.firebaseio.com';
+const FB_NODE = 'agri_data';
+
+let _fbTimer  = null;
+let _fbQueue  = {};
+
+// Pull ALL data from Firebase → localStorage (called after login)
+async function fbSyncFromCloud(){
+  showSyncBadge('⏳ Cloud se sync ho raha hai...','#d4a843');
+  try{
+    const res  = await fetch(FB_DB+'/'+FB_NODE+'.json');
+    const cloud= await res.json();
+    if(cloud && typeof cloud==='object'){
+      Object.keys(cloud).forEach(function(k){
+        if(cloud[k]!==null && cloud[k]!==undefined)
+          localStorage.setItem(k, JSON.stringify(cloud[k]));
+      });
+    }
+    showSyncBadge('☁️ Synced','#52b788');
+    setTimeout(hideSyncBadge, 3000);
+  } catch(e){
+    showSyncBadge('📴 Offline Mode','#ef4444');
+    setTimeout(hideSyncBadge, 4000);
+  }
+  // Re-render all tables after sync
+  if(typeof renderLettuceTable==='function')   renderLettuceTable();
+  if(typeof renderFumigationTable==='function') renderFumigationTable();
+  if(typeof renderQarTable==='function')        renderQarTable();
+  if(typeof renderSavedInvoices==='function')   renderSavedInvoices();
+  if(typeof updateStats==='function')           updateStats();
+  if(typeof updateBadges==='function')          updateBadges();
+}
+
+// Push a key to Firebase (batched every 1.5s)
+function fbPush(key, data){
+  _fbQueue[key] = data;
+  clearTimeout(_fbTimer);
+  _fbTimer = setTimeout(fbFlush, 1500);
+  showSyncBadge('💾 Save ho raha hai...','#d4a843');
+}
+
+async function fbFlush(){
+  if(!Object.keys(_fbQueue).length) return;
+  var patch = {};
+  Object.keys(_fbQueue).forEach(function(k){ patch[k]=_fbQueue[k]; });
+  _fbQueue = {};
+  try{
+    await fetch(FB_DB+'/'+FB_NODE+'.json',{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(patch)
+    });
+    showSyncBadge('☁️ Saved','#52b788');
+    setTimeout(hideSyncBadge, 2000);
+  } catch(e){
+    showSyncBadge('⚠️ Save nahi hua!','#ef4444');
+    Object.assign(_fbQueue, patch); // retry queue
+  }
+}
+
+function showSyncBadge(msg, color){
+  var el=document.getElementById('sync-status-badge');
+  if(el){ el.textContent=msg; el.style.color=color||'#52b788'; el.style.display='inline-flex'; }
+}
+function hideSyncBadge(){
+  var el=document.getElementById('sync-status-badge');
+  if(el) el.style.display='none';
+}
+
+// Auto-sync when page already has session
+document.addEventListener('DOMContentLoaded',function(){
+  if(sessionStorage.getItem('agri_auth')==='yes'){
+    setTimeout(fbSyncFromCloud, 600);
+  }
+});
 </script>
 
 <!-- SIDEBAR OVERLAY -->
@@ -1374,6 +1515,7 @@ function checkLock(){
     <label class="footer-btn" style="cursor:pointer;color:#74c69d;border-color:rgba(82,183,136,0.35);" title="Sirf nayi entries add hongi, duplicates skip">
       ⚡ Merge Backup <input type="file" accept=".json" onchange="uploadMergeBackup(event)" style="display:none">
     </label>
+    <button class="footer-btn" onclick="logoutApp()" style="color:#74c69d;border-color:rgba(82,183,136,0.3);">🔒 Logout (+ Backup)</button>
     <button class="footer-btn danger" onclick="clearAllData()">🗑 Clear All Data</button>
   </div>
 </aside>
@@ -1388,6 +1530,7 @@ function checkLock(){
       <div class="topbar-title" id="topbar-title">🥬 Lettuce Supply Records</div>
       <div class="topbar-subtitle" id="topbar-sub">Premium Database Management System</div>
     </div>
+    <span id="sync-status-badge" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(82,183,136,0.12);border:1px solid rgba(82,183,136,0.25);color:#52b788;white-space:nowrap;">☁️ Synced</span>
   </header>
 
   <!-- STATS -->
@@ -2933,17 +3076,21 @@ function closeSidebar(){
 // ══════════════════════════════════════
 const KEYS = { lettuce:'aaf_lettuce', fumigation:'aaf_fumigation', qar:'aaf_qar', invoice:'aaf_invoices', trash:'aaf_trash', rateHistory:'aaf_rate_history', basketReturn:'aaf_basket_return', farms:'aaf_farms' };
 let currentRecord = null, currentRecordType = null;
-// ═══ DATABASE: LocalStorage only ═══
+// ═══ DATABASE: LocalStorage + Firebase Cloud Sync ═══
 function load(k){
   try{ return JSON.parse(localStorage.getItem(k)||'[]'); }catch{ return []; }
 }
 
 function save(k,d){
-  try{ localStorage.setItem(k,JSON.stringify(d)); }catch(e){ console.warn('save error:',e); }
+  try{
+    localStorage.setItem(k,JSON.stringify(d));
+    if(typeof fbPush==='function') fbPush(k,d);
+  }catch(e){ console.warn('save error:',e); }
 }
 
 function _clearKey(k){
   localStorage.removeItem(k);
+  if(typeof fbPush==='function') fbPush(k,[]);
 }
 
 // ══════════════════════════════════════
@@ -7641,7 +7788,10 @@ let currentYear = new Date().getFullYear();
 let editingFarmId = null;   // null = new, string = editing existing
 
 function getAll(key) { try { return JSON.parse(localStorage.getItem(key)||'{}'); } catch { return {}; } }
-function setAll(key, obj) { localStorage.setItem(key, JSON.stringify(obj)); }
+function setAll(key, obj) {
+  localStorage.setItem(key, JSON.stringify(obj));
+  if(typeof fbPush==='function') fbPush(key, obj);
+}
 
 // Farms (Water Report)
 function getWaterFarms()       { return getAll('wqtr_farms'); }
