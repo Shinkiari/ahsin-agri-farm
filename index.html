@@ -1493,11 +1493,16 @@ async function fbSyncFromCloud(){
     showSyncBadge('📴 Offline Mode','#ef4444');
     setTimeout(hideSyncBadge, 4000);
   }
+  // Cloud data aane ke baad farms clean + sync karo
+  try{ if(typeof dedupeFarms==='function') dedupeFarms(); }catch(e){}
+  try{ if(typeof syncFarmsFromLettuce==='function') syncFarmsFromLettuce(); }catch(e){}
+  try{ if(typeof syncAcresFromFumigation==='function') syncAcresFromFumigation(); }catch(e){}
   // Re-render all tables after sync
   if(typeof renderLettuceTable==='function')   renderLettuceTable();
   if(typeof renderFumigationTable==='function') renderFumigationTable();
   if(typeof renderQarTable==='function')        renderQarTable();
   if(typeof renderSavedInvoices==='function')   renderSavedInvoices();
+  if(typeof renderFarmsTable==='function')      renderFarmsTable();
   if(typeof updateStats==='function')           updateStats();
   if(typeof updateBadges==='function')          updateBadges();
 }
@@ -4686,6 +4691,9 @@ function renderFarmsTable(){
       <tbody>${rows}</tbody>
     </table>
     <div style="margin-top:10px;color:var(--text3);font-size:12px;">Total: ${farms.length} farms</div>`;
+  // Badge ko table ke actual count se sync karo (timing-proof)
+  var fmEl=document.getElementById('nb-farms');
+  if(fmEl) fmEl.textContent=farms.length>0?farms.length:'';
 }
 
 function saveFarmEntry(editId=null){
