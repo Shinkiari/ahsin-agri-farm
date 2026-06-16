@@ -3343,7 +3343,7 @@ function renderLettuceTable(){
       <td style="font-family:var(--mono);font-size:11px;color:var(--mint);">${r.traceNo||'—'}</td>
       <td>${r.variety||'—'}</td>
       <td>${r.temp?r.temp+'°C':'—'}</td>
-      <td>${r.baskets||'—'}</td>
+      <td>${r.baskets?(r.packType==='box'?'📦 '+r.baskets:'🧺 '+r.baskets):'—'}</td>
       <td>${r.totalWt?r.totalWt+' kg':'—'}</td>
       <td>${r.customer||'—'}</td>
       <td>${r.fumigation?`<span class="badge badge-${r.fumigation==='Yes'?'yes':'no'}">${r.fumigation}</span>`:'—'}</td>
@@ -3368,9 +3368,10 @@ function viewLettuceRecord(id){
     ${rv('Lettuce Variety',r.variety)}${rv('Temp During Supply',r.temp?r.temp+'°C':'')}
     ${rv('Harvesting Date',r.harvestDate)}${rv('Harvesting Time',r.harvestTime)}
     ${rv('Avg Head Weight',r.headWt?r.headWt+' g':'')}
-    ${rv('Basket Avg Weight',r.basketWt?r.basketWt+' kg':'')}
-    ${rv('Total Baskets',r.baskets)}${rv('Total Weight (Gross)',r.totalWt?r.totalWt+' kg':'')}
-    ${rv('Basket Tare Weight',r.basketTare?r.basketTare+' kg/tokri':'1 kg/tokri')}
+    ${rv('Packaging Type',r.packType==='box'?'📦 Box':'🧺 Basket')}
+    ${rv(r.packType==='box'?'Box Wt (Gross)':'Basket Avg Weight',r.basketWt?r.basketWt+' kg':'')}
+    ${rv(r.packType==='box'?'Total Boxes':'Total Baskets',r.baskets)}${rv('Total Weight (Gross)',r.totalWt?r.totalWt+' kg':'')}
+    ${rv(r.packType==='box'?'Tare / Box':'Basket Tare Weight',r.basketTare?r.basketTare+' kg':(r.packType==='box'?'1 kg':'1 kg/tokri'))}
     ${rv('Net Weight (Safi)',r.netWt?r.netWt+' kg':'—')}
     ${rv('Best Before',r.bestBefore)}${rv('Fumigation',r.fumigation)}
     ${rv('Pesticide Used',r.pesticide)}${rv('MSDS',r.msds)}
@@ -5125,7 +5126,7 @@ function clearQarForm(){
   });
 }
 function renderQarTable(){
-  const records=load(KEYS.qar).sort((a,b)=>(a.date||'').localeCompare(b.date||''));const q=(document.getElementById('q-search')?document.getElementById('q-search').value:'').toLowerCase();
+  const records=load(KEYS.qar).sort((a,b)=>{var d=(b.date||'').localeCompare(a.date||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});const q=(document.getElementById('q-search')?document.getElementById('q-search').value:'').toLowerCase();
   const filtered=records.filter(r=>[r.date,r.decision,r.remarks].some(v=>(v||'').toLowerCase().includes(q)));
   const countEl=document.getElementById('q-count');if(countEl)countEl.textContent=`${filtered.length} record(s)`;
   const tbody=document.getElementById('qar-tbody');if(!tbody)return;
@@ -5133,7 +5134,7 @@ function renderQarTable(){
   tbody.innerHTML=filtered.map((r,i)=>`
     <tr>
       <td>${i+1}</td>
-      <td>${r.date||'—'}</td>
+      <td style="white-space:nowrap;min-width:96px;">${fmtDMY(r.date)}</td>
       <td>${r.decision?`<span style="font-size:11px;font-weight:700;color:${r.decision==='Accepted'?'var(--mint)':'var(--red)'}">${r.decision}</span>`:'<span style="font-size:11px;font-weight:700;color:var(--sand)">—</span>'}</td>
       <td style="font-size:11px;color:var(--text2);">${r.remarks||'—'}</td>
       <td><div class="action-row">
@@ -7017,13 +7018,13 @@ function onPackTypeChange(){
   if(isBox){
     if(lblB)lblB.textContent='🧮 Total Boxes';
     if(lblT)lblT.textContent='⚖ Tare/Box';
-    if(lblBW)lblBW.textContent='✅ Net/Box (Safi)';
+    if(lblBW)lblBW.textContent='📦 Box Wt (Gross)';
     if(tag){tag.textContent='Auto';}
     if(tagN){tagN.textContent='Auto';}
     document.getElementById('l-total-wt').removeAttribute('readonly');
     document.getElementById('l-total-wt').placeholder='Auto...';
-    document.getElementById('l-basket-wt').placeholder='20';
-    if(!document.getElementById('l-basket-wt').dataset.boxset){document.getElementById('l-basket-wt').value='20';}
+    document.getElementById('l-basket-wt').placeholder='24';
+    if(!document.getElementById('l-basket-wt').dataset.boxset){document.getElementById('l-basket-wt').value='24';}
     if(!document.getElementById('l-basket-tare').dataset.boxset){document.getElementById('l-basket-tare').value='1';}
   }else{
     if(lblB)lblB.textContent='🧮 Total Baskets';
@@ -7045,7 +7046,10 @@ function onNetManual(){
   const boxes=parseFloat(document.getElementById('l-baskets').value)||0;
   const tare=parseFloat(document.getElementById('l-basket-tare').value)||0;
   const net=parseFloat(document.getElementById('l-net-wt').value)||0;
-  document.getElementById('l-total-wt').value=(net+boxes*tare).toFixed(1);
+  const gross=net+boxes*tare;
+  document.getElementById('l-total-wt').value=gross.toFixed(1);
+  // Box gross-per-box bhi update karo
+  if(boxes>0) document.getElementById('l-basket-wt').value=(gross/boxes).toFixed(1);
 }
 function calcTotalWeight(){
   const pt=(document.getElementById('l-pack-type')||{}).value||'basket';
@@ -7053,12 +7057,13 @@ function calcTotalWeight(){
   const netEl=document.getElementById('l-net-wt');
   if(pt==='box'){
     const boxes=parseFloat(document.getElementById('l-baskets').value)||0;
-    const netPerBox=parseFloat(document.getElementById('l-basket-wt').value)||0;
+    const grossPerBox=parseFloat(document.getElementById('l-basket-wt').value)||0;
     const tare=parseFloat(document.getElementById('l-basket-tare').value)||0;
-    if(boxes>0&&netPerBox>0){
-      const net=boxes*netPerBox;
-      netEl.value=net.toFixed(1);
-      totalEl.value=(net+boxes*tare).toFixed(1);
+    if(boxes>0&&grossPerBox>0){
+      const gross=boxes*grossPerBox;          // 101 × 24 = 2424
+      const net=gross-(boxes*tare);           // 2424 − (101×1) = 2323
+      totalEl.value=gross.toFixed(1);
+      netEl.value=net>0?net.toFixed(1):'0.0';
     }else{netEl.value='';totalEl.value='';}
     return;
   }
@@ -7084,7 +7089,7 @@ function autoFarmFromTrace(traceVal){
 
 function openLabelLettuceDD(){const panel=document.getElementById('lbl-lettuce-panel');panel.style.display=panel.style.display==='none'?'block':'none';if(panel.style.display==='block'){filterLabelLettuceDD('');document.getElementById('lbl-lettuce-search').focus();}}
 function filterLabelLettuceDD(q){
-  const list=document.getElementById('lbl-lettuce-list');const records=load(KEYS.lettuce);
+  const list=document.getElementById('lbl-lettuce-list');const records=load(KEYS.lettuce).slice().sort((a,b)=>{var d=(b.supplyDate||'').localeCompare(a.supplyDate||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});
   const filtered=q?records.filter(r=>(r.traceNo||'').toLowerCase().includes(q.toLowerCase())||(r.supplyDate||'').includes(q)||(r.variety||'').toLowerCase().includes(q.toLowerCase())):records;
   if(!filtered.length){list.innerHTML='<div style="padding:12px 14px;font-size:11px;color:var(--text-dim);">😕 Not found</div>';return;}
   list.innerHTML=filtered.slice(0,30).map(r=>`
