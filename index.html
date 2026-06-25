@@ -3478,7 +3478,14 @@ function editLettuceRecord(id){
   document.getElementById('l-total-wt').value=r.totalWt||'';
   document.getElementById('l-basket-tare').value=r.basketTare||'1';
   document.getElementById('l-net-wt').value=r.netWt||'';
-  if((r.packType||'basket')==='box'){document.getElementById('l-basket-wt').dataset.boxset='1';document.getElementById('l-basket-tare').dataset.boxset='1';}
+  // dataset.boxset pehle clear karo taake onPackTypeChange fresh labels set kare
+  delete document.getElementById('l-basket-wt').dataset.boxset;
+  delete document.getElementById('l-basket-tare').dataset.boxset;
+  // Agar box record hai toh values load karne ke baad flag set karo
+  if((r.packType||'basket')==='box'){
+    document.getElementById('l-basket-wt').dataset.boxset='1';
+    document.getElementById('l-basket-tare').dataset.boxset='1';
+  }
   if(typeof onPackTypeChange==='function')onPackTypeChange();
   const bb=r.bestBefore||'',bbm=bb.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   document.getElementById('l-bb-day').value=bbm?bbm[1]:'';
@@ -7139,8 +7146,12 @@ function onPackTypeChange(){
     document.getElementById('l-total-wt').removeAttribute('readonly');
     document.getElementById('l-total-wt').placeholder='Auto...';
     document.getElementById('l-basket-wt').placeholder='24';
+    // Sirf tab default set karo jab boxset flag nahi — yani fresh switch
     if(!document.getElementById('l-basket-wt').dataset.boxset){document.getElementById('l-basket-wt').value='24';}
     if(!document.getElementById('l-basket-tare').dataset.boxset){document.getElementById('l-basket-tare').value='1';}
+    // Ab flag set karo
+    document.getElementById('l-basket-wt').dataset.boxset='1';
+    document.getElementById('l-basket-tare').dataset.boxset='1';
   }else{
     if(lblB)lblB.textContent='🧮 Total Baskets';
     if(lblT)lblT.textContent='⚖ Tare/Basket';
@@ -7149,6 +7160,13 @@ function onPackTypeChange(){
     if(tagN){tagN.textContent='Auto';}
     document.getElementById('l-total-wt').placeholder='Auto...';
     document.getElementById('l-basket-wt').placeholder='11.5';
+    // Basket mode mein defaults reset karo agar pehle box tha
+    if(document.getElementById('l-basket-wt').dataset.boxset){
+      document.getElementById('l-basket-wt').value='11.5';
+    }
+    if(document.getElementById('l-basket-tare').dataset.boxset){
+      document.getElementById('l-basket-tare').value='1.5';
+    }
     delete document.getElementById('l-basket-wt').dataset.boxset;
     delete document.getElementById('l-basket-tare').dataset.boxset;
   }
