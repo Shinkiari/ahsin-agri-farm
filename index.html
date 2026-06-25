@@ -1952,6 +1952,7 @@ document.addEventListener('DOMContentLoaded',function(){
         <div class="form-actions">
           <button class="btn btn-primary" onclick="saveLettuce()">💾 Save Record</button>
           <button class="btn btn-outline" onclick="clearLettuceForm()">✖ Clear Form</button>
+          <button class="btn btn-outline" id="btn-cancel-lettuce" style="display:none;background:rgba(220,53,69,0.12);border-color:rgba(220,53,69,0.4);color:#ff6b6b;" onclick="cancelLettuceEdit()">✖ Cancel Edit</button>
         </div>
       </div>
 
@@ -2076,6 +2077,7 @@ document.addEventListener('DOMContentLoaded',function(){
         <div class="form-actions">
           <button class="btn btn-primary" onclick="saveFumigation()">💾 Save Record</button>
           <button class="btn btn-outline" onclick="clearFumigationForm()">✖ Clear Form</button>
+          <button class="btn btn-outline" id="btn-cancel-fumigation" style="display:none;background:rgba(220,53,69,0.12);border-color:rgba(220,53,69,0.4);color:#ff6b6b;" onclick="cancelFumigationEdit()">✖ Cancel Edit</button>
         </div>
       </div>
 
@@ -2318,6 +2320,7 @@ document.addEventListener('DOMContentLoaded',function(){
         <div class="form-actions" style="margin-top:16px;">
           <button class="btn btn-primary" onclick="saveQar()">💾 Save QAR Report</button>
           <button class="btn btn-outline" onclick="clearQarForm()">✖ Clear Form</button>
+          <button class="btn btn-outline" id="btn-cancel-qar" style="display:none;background:rgba(220,53,69,0.12);border-color:rgba(220,53,69,0.4);color:#ff6b6b;" onclick="cancelQarEdit()">✖ Cancel Edit</button>
         </div>
       </div>
 
@@ -2393,6 +2396,14 @@ document.addEventListener('DOMContentLoaded',function(){
           <div class="form-group" style="min-width:160px;">
             <label>Customer Filter</label>
             <input type="text" id="inv-customer" placeholder="Blank = all customers">
+          </div>
+          <div class="form-group" style="min-width:150px;">
+            <label>📦 Packaging Type</label>
+            <select id="inv-pack-filter" style="border-color:rgba(82,183,136,0.4);">
+              <option value="all">🧺📦 All (Basket + Box)</option>
+              <option value="basket">🧺 Basket Only</option>
+              <option value="box">📦 Box Only</option>
+            </select>
           </div>
           <div class="form-group" style="min-width:130px;">
             <label>Rate per kg (Rs.) <button onclick="showRateHistory()" style="margin-left:6px;font-size:10px;padding:2px 7px;border:1px solid rgba(82,183,136,0.4);background:rgba(82,183,136,0.1);color:var(--mint);border-radius:4px;cursor:pointer;" title="Rate History">📈 History</button></label>
@@ -2480,6 +2491,9 @@ document.addEventListener('DOMContentLoaded',function(){
             </button>
             <button class="btn btn-primary" style="background:linear-gradient(135deg,#1a4a6b,#2e6ca4);border-color:#2e6ca4;font-size:13px;padding:8px 18px;" onclick="autoSaveAllMonthlyInvoices()">
               🗓 Monthly Invoices Generate Karo
+            </button>
+            <button class="btn btn-primary" style="background:linear-gradient(135deg,#2d6b1a,#4a9e2e);border-color:#4a9e2e;font-size:13px;padding:8px 18px;" onclick="refreshCurrentMonthInvoice()" title="Current month ki invoice latest records se update karo">
+              🔄 Current Month Update
             </button>
             <button class="btn btn-primary" style="background:linear-gradient(135deg,#6b3a1a,#a45e2e);border-color:#a45e2e;font-size:13px;padding:8px 18px;" onclick="autoSaveAllQarReports()">
               📋 Sab QAR Reports Generate Karo
@@ -3131,6 +3145,8 @@ function autoSaveMonthlyInvoice(yearMonth){
   const fromDate=yearMonth+'-01';
   const toDate=yearMonth+'-'+String(lastDay).padStart(2,'0');
   const totalBaskets=monthRecords.reduce((s,r)=>s+(parseFloat(r.baskets)||0),0);
+  const totalBoxes  =monthRecords.reduce((s,r)=>s+(r.packType==='box'?parseFloat(r.baskets)||0:0),0);
+  const totalBsktOnly=monthRecords.reduce((s,r)=>s+(!r.packType||r.packType==='basket'?parseFloat(r.baskets)||0:0),0);
   const totalWt=monthRecords.reduce((s,r)=>s+(parseFloat(r.totalWt)||0),0);
   const totalNetWt=monthRecords.reduce((s,r)=>{
     const g=parseFloat(r.totalWt)||0,b=parseFloat(r.baskets)||0,t=parseFloat(r.basketTare)||1;
@@ -3148,7 +3164,7 @@ function autoSaveMonthlyInvoice(yearMonth){
     from:fromDate,to:toDate,
     customers,
     totalSupplies:monthRecords.length,
-    totalBaskets,totalWt,totalNetWt,
+    totalBaskets,totalBoxes,totalBsktOnly,totalWt,totalNetWt,
     rate:DEFAULT_RATE,
     totalAmount,
     weightMode:'net',
@@ -3169,6 +3185,17 @@ function autoSaveAllMonthlyInvoices(){
   resequenceInvoices();
   renderSavedInvoices();
   toast('✅ Sab months ki invoices save ho gayin! Total: '+allMonths.length);
+}
+
+function refreshCurrentMonthInvoice(){
+  const thisMonth=new Date().toISOString().slice(0,7);
+  autoSaveMonthlyInvoice(thisMonth);
+  // Also refresh today's daily
+  const today=new Date().toISOString().slice(0,10);
+  autoSaveDailyInvoice(today);
+  resequenceInvoices();
+  renderSavedInvoices();
+  toast('✅ Current month ('+thisMonth+') aur aaj ki daily invoice update ho gayi!');
 }
 
 // ══════════════════════════════════════════════════════
@@ -3230,7 +3257,8 @@ function autoSaveDailyInvoice(supplyDate){
   const invNo='AAF-DAI-'+year+'-'+String(num).padStart(3,'0');
   // Calculate totals
   const totalBaskets=dayRecords.reduce((s,r)=>s+(parseFloat(r.baskets)||0),0);
-  const totalWt=dayRecords.reduce((s,r)=>s+(parseFloat(r.totalWt)||0),0);
+  const totalBoxes  =dayRecords.reduce((s,r)=>s+(r.packType==='box'?parseFloat(r.baskets)||0:0),0);
+  const totalBsktOnly=dayRecords.reduce((s,r)=>s+(!r.packType||r.packType==='basket'?parseFloat(r.baskets)||0:0),0);((s,r)=>s+(parseFloat(r.totalWt)||0),0);
   const totalNetWt=dayRecords.reduce((s,r)=>s+(parseFloat(r.netWt)||0),0);
   const customers=[...new Set(dayRecords.map(r=>r.customer).filter(Boolean))].join(', ')||'—';
   // Apply default rate to each record
@@ -3249,7 +3277,7 @@ function autoSaveDailyInvoice(supplyDate){
     from:supplyDate,to:supplyDate,
     customers,
     totalSupplies:dayRecords.length,
-    totalBaskets,totalWt,totalNetWt:useNetWt,
+    totalBaskets,totalBoxes,totalBsktOnly,totalWt,totalNetWt:useNetWt,
     rate:DEFAULT_RATE,
     totalAmount,
     weightMode:'net',
@@ -3316,6 +3344,14 @@ function saveLettuce(isEdit=false,editId=null){
   try{syncFarmsFromLettuce();}catch(e){}
   toast(isEdit?'✅ Record + Invoice update ho gaya!':'✅ Record aur Invoice save ho gaya!');
   autoCheckpoint();
+}
+
+function cancelLettuceEdit(){
+  const btn=document.querySelector('#panel-lettuce .form-actions .btn-primary');
+  if(btn){btn.textContent='💾 Save Record';btn.onclick=()=>saveLettuce();}
+  document.getElementById('btn-cancel-lettuce').style.display='none';
+  clearLettuceForm();
+  toast('✖ Edit cancel ho gaya.');
 }
 
 function clearLettuceForm(){
@@ -3460,7 +3496,9 @@ function editLettuceRecord(id){
   document.getElementById('l-remarks').value=r.remarks||'';
   const btn=document.querySelector('#panel-lettuce .form-actions .btn-primary');
   btn.textContent='💾 Update Record';
-  btn.onclick=()=>{saveLettuce(true,r.id);btn.textContent='💾 Save Record';btn.onclick=()=>saveLettuce();};
+  btn.onclick=()=>{saveLettuce(true,r.id);btn.textContent='💾 Save Record';btn.onclick=()=>saveLettuce();document.getElementById('btn-cancel-lettuce').style.display='none';};
+  const cancelBtn=document.getElementById('btn-cancel-lettuce');
+  if(cancelBtn) cancelBtn.style.display='';
   window.scrollTo({top:0,behavior:'smooth'});
   toast('📝 Edit mode. Changes kar ke Update karein.');
 }
@@ -3603,6 +3641,14 @@ function saveFumigation(isEdit=false,editId=null){
   toast(isEdit?'✅ Record update ho gaya!':'✅ Fumigation record save ho gaya!');
 }
 
+function cancelFumigationEdit(){
+  const btn=document.querySelector('#panel-fumigation .form-actions .btn-primary');
+  if(btn){btn.textContent='💾 Save Record';btn.onclick=()=>saveFumigation();}
+  document.getElementById('btn-cancel-fumigation').style.display='none';
+  clearFumigationForm();
+  toast('✖ Edit cancel ho gaya.');
+}
+
 function clearFumigationForm(){
   ['f-trace','f-variety','f-best-before','f-remarks','f-seeding','f-shifting','f-harvesting','f-area'].forEach(id=>{
     document.getElementById(id).value='';
@@ -3683,7 +3729,9 @@ function editFumigationRecord(id){
   (r.pesticides||[]).forEach(p=>{addPestEntry();document.getElementById('pest-name-'+pestCount).value=p.name||'';document.getElementById('pest-date-'+pestCount).value=p.date||'';});
   const btn=document.querySelector('#panel-fumigation .form-actions .btn-primary');
   btn.textContent='💾 Update Record';
-  btn.onclick=()=>{saveFumigation(true,r.id);btn.textContent='💾 Save Record';btn.onclick=()=>saveFumigation();};
+  btn.onclick=()=>{saveFumigation(true,r.id);btn.textContent='💾 Save Record';btn.onclick=()=>saveFumigation();document.getElementById('btn-cancel-fumigation').style.display='none';};
+  const cancelBtn=document.getElementById('btn-cancel-fumigation');
+  if(cancelBtn) cancelBtn.style.display='';
   document.getElementById('panel-fumigation').scrollIntoView({behavior:'smooth'});
   toast('📝 Edit mode. Changes kar ke Update karein.');
 }
@@ -5143,6 +5191,14 @@ function saveQar(isEdit=false,editId=null){
   save(KEYS.qar,records);clearQarForm();renderQarTable();updateStats();
   toast(isEdit?'✅ QAR updated!':'✅ QAR saved!');
 }
+function cancelQarEdit(){
+  const btn=document.querySelector('#panel-qar .form-actions .btn-primary');
+  if(btn){btn.textContent='💾 Save QAR Report';btn.onclick=()=>saveQar();}
+  document.getElementById('btn-cancel-qar').style.display='none';
+  clearQarForm();
+  toast('✖ Edit cancel ho gaya.');
+}
+
 function clearQarForm(){
   const qd=document.getElementById('q-date');if(qd)qd.value=new Date().toISOString().slice(0,10);
   const qr=document.getElementById('q-remarks');if(qr)qr.value='';
@@ -5198,7 +5254,9 @@ function editQarRecord(id){
     if(r.remarksPerItem)Object.keys(r.remarksPerItem).forEach(n=>{const el=document.getElementById('qr'+n);if(el)el.value=r.remarksPerItem[n]||'';});
     setQarDecision(r.decision||'');
     const btn=document.querySelector('#panel-qar .form-actions .btn-primary');
-    if(btn){btn.textContent='💾 Update QAR';btn.onclick=()=>{saveQar(true,r.id);btn.textContent='💾 Save QAR Report';btn.onclick=()=>saveQar();}}
+    if(btn){btn.textContent='💾 Update QAR';btn.onclick=()=>{saveQar(true,r.id);btn.textContent='💾 Save QAR Report';btn.onclick=()=>saveQar();const cb=document.getElementById('btn-cancel-qar');if(cb)cb.style.display='none';}}
+    const cancelBtn=document.getElementById('btn-cancel-qar');
+    if(cancelBtn) cancelBtn.style.display='';
     toast('📝 QAR Edit mode.');
   },100);
 }
@@ -5290,15 +5348,17 @@ function onInvTypeChange(){
 
 function getInvoiceDateRange(){
   const type=document.getElementById('inv-type').value;
+  const packFilter=(document.getElementById('inv-pack-filter')||{}).value||'all';
+  const packSuffix=packFilter==='basket'?' — Basket Only':packFilter==='box'?' — Box Only':'';
   const today=new Date();let from,to,label;
-  if(type==='daily'){const d=document.getElementById('inv-date').value;if(!d){toast('⚠️ Date select karein!');return null;}from=d;to=d;label='Daily: '+formatDate(d);}
-  else if(type==='weekly'){const d=document.getElementById('inv-date').value;if(!d){toast('⚠️ Week starting date select karein!');return null;}const start=new Date(d);const end=new Date(start);end.setDate(end.getDate()+6);from=d;to=end.toISOString().slice(0,10);label='Weekly: '+formatDate(from)+' — '+formatDate(to);}
-  else if(type==='monthly'){const m=document.getElementById('inv-month').value;if(!m){toast('⚠️ Month select karein!');return null;}from=m+'-01';const last=new Date(m.split('-')[0],m.split('-')[1],0);to=m+'-'+String(last.getDate()).padStart(2,'0');label='Monthly: '+new Date(from).toLocaleString('en-GB',{month:'long',year:'numeric'});}
-  else if(type==='last3'){const end=new Date(today);const start=new Date(today);start.setMonth(start.getMonth()-3);from=start.toISOString().slice(0,10);to=end.toISOString().slice(0,10);label='Last 3 Months: '+formatDate(from)+' — '+formatDate(to);}
-  else if(type==='last6'){const end=new Date(today);const start=new Date(today);start.setMonth(start.getMonth()-6);from=start.toISOString().slice(0,10);to=end.toISOString().slice(0,10);label='Last 6 Months: '+formatDate(from)+' — '+formatDate(to);}
-  else if(type==='yearly'){const y=document.getElementById('inv-year').value;from=y+'-01-01';to=y+'-12-31';label='Year: '+y;}
-  else if(type==='all'){from='2000-01-01';to='2099-12-31';label='All Records';}
-  else{from=document.getElementById('inv-from').value;to=document.getElementById('inv-to').value;if(!from||!to){toast('⚠️ From aur To date dono select karein!');return null;}if(from>to){toast('⚠️ From date must be before To date!');return null;}label='Custom: '+formatDate(from)+' — '+formatDate(to);}
+  if(type==='daily'){const d=document.getElementById('inv-date').value;if(!d){toast('⚠️ Date select karein!');return null;}from=d;to=d;label='Daily: '+formatDate(d)+packSuffix;}
+  else if(type==='weekly'){const d=document.getElementById('inv-date').value;if(!d){toast('⚠️ Week starting date select karein!');return null;}const start=new Date(d);const end=new Date(start);end.setDate(end.getDate()+6);from=d;to=end.toISOString().slice(0,10);label='Weekly: '+formatDate(from)+' — '+formatDate(to)+packSuffix;}
+  else if(type==='monthly'){const m=document.getElementById('inv-month').value;if(!m){toast('⚠️ Month select karein!');return null;}from=m+'-01';const last=new Date(m.split('-')[0],m.split('-')[1],0);to=m+'-'+String(last.getDate()).padStart(2,'0');label='Monthly: '+new Date(from).toLocaleString('en-GB',{month:'long',year:'numeric'})+packSuffix;}
+  else if(type==='last3'){const end=new Date(today);const start=new Date(today);start.setMonth(start.getMonth()-3);from=start.toISOString().slice(0,10);to=end.toISOString().slice(0,10);label='Last 3 Months: '+formatDate(from)+' — '+formatDate(to)+packSuffix;}
+  else if(type==='last6'){const end=new Date(today);const start=new Date(today);start.setMonth(start.getMonth()-6);from=start.toISOString().slice(0,10);to=end.toISOString().slice(0,10);label='Last 6 Months: '+formatDate(from)+' — '+formatDate(to)+packSuffix;}
+  else if(type==='yearly'){const y=document.getElementById('inv-year').value;from=y+'-01-01';to=y+'-12-31';label='Year: '+y+packSuffix;}
+  else if(type==='all'){from='2000-01-01';to='2099-12-31';label='All Records'+packSuffix;}
+  else{from=document.getElementById('inv-from').value;to=document.getElementById('inv-to').value;if(!from||!to){toast('⚠️ From aur To date dono select karein!');return null;}if(from>to){toast('⚠️ From date must be before To date!');return null;}label='Custom: '+formatDate(from)+' — '+formatDate(to)+packSuffix;}
   return{type,from,to,label};
 }
 
@@ -5358,15 +5418,25 @@ function resequenceInvoices(){
 function generateInvoice(){
   const range=getInvoiceDateRange();if(!range)return;
   const custFilter=document.getElementById('inv-customer').value.trim().toLowerCase();
-  const records=load(KEYS.lettuce).filter(r=>{if(!r.supplyDate)return false;if(r.supplyDate<range.from||r.supplyDate>range.to)return false;if(custFilter&&!(r.customer||'').toLowerCase().includes(custFilter))return false;return true;}).sort((a,b)=>a.supplyDate.localeCompare(b.supplyDate));
+  const packFilter=(document.getElementById('inv-pack-filter')||{}).value||'all';
+  const records=load(KEYS.lettuce).filter(r=>{
+    if(!r.supplyDate)return false;
+    if(r.supplyDate<range.from||r.supplyDate>range.to)return false;
+    if(custFilter&&!(r.customer||'').toLowerCase().includes(custFilter))return false;
+    if(packFilter==='basket'&&r.packType==='box')return false;
+    if(packFilter==='box'&&(!r.packType||r.packType==='basket'))return false;
+    return true;
+  }).sort((a,b)=>a.supplyDate.localeCompare(b.supplyDate));
   if(!records.length){toast('⚠️ No records found for this period!');document.getElementById('inv-preview-card').style.display='none';document.getElementById('inv-rate-panel').style.display='none';return;}
   const totalBaskets=records.reduce((s,r)=>s+(parseFloat(r.baskets)||0),0);
+  const totalBoxes  =records.reduce((s,r)=>s+(r.packType==='box'?parseFloat(r.baskets)||0:0),0);
+  const totalBsktOnly=records.reduce((s,r)=>s+(!r.packType||r.packType==='basket'?parseFloat(r.baskets)||0:0),0);
   const totalWt=records.reduce((s,r)=>s+(parseFloat(r.totalWt)||0),0);
   const totalNetWt=records.reduce((s,r)=>s+(parseFloat(r.netWt)||0),0);
   const customers=[...new Set(records.map(r=>r.customer).filter(Boolean))].join(', ')||'—';
   const rate=parseFloat(document.getElementById('inv-rate').value)||240;
   const autoInvNo=getAutoInvNo(range);
-  currentInvoiceData={range,records,totalBaskets,totalWt,totalNetWt,customers,rate,totalAmount:0,invNo:autoInvNo};
+  currentInvoiceData={range,records,totalBaskets,totalBoxes,totalBsktOnly,totalWt,totalNetWt,customers,rate,totalAmount:0,invNo:autoInvNo};
   buildRatePanel(records,rate);
   document.getElementById('inv-rate-panel').style.display='block';
   document.getElementById('inv-rate-panel').scrollIntoView({behavior:'smooth'});
@@ -5449,6 +5519,23 @@ function buildInvoiceHTML(data, forPrint=false){
   const timeStr    = now.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
   const weightMode = data.weightMode||'net';
   const cols       = data.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true};
+  // Packaging type detection
+  const hasBox          = records.some(r=>r.packType==='box');
+  const hasBasket       = records.some(r=>!r.packType||r.packType==='basket');
+  const isMixed         = hasBox && hasBasket;
+  const totalBoxCount   = records.reduce((s,r)=>s+(r.packType==='box'?parseFloat(r.baskets)||0:0),0);
+  const totalBsktCount  = records.reduce((s,r)=>s+(!r.packType||r.packType==='basket'?parseFloat(r.baskets)||0:0),0);
+  // Summary label
+  const packLabel  = isMixed
+    ? `${totalBsktCount} Baskets + ${totalBoxCount} Boxes`
+    : (hasBox ? 'Boxes' : 'Baskets');
+  const packLabelU = isMixed
+    ? `${totalBsktCount} BSKTS + ${totalBoxCount} BOXS`
+    : (hasBox ? 'BOXES' : 'BASKETS');
+  // What to show as the "count" in summary strip
+  const packCountDisplay = isMixed
+    ? `<div style="font-size:13px;font-weight:900;color:#1a3a2a;line-height:1.4;">${totalBsktCount}<span style="font-size:9px;font-weight:400;color:#555;"> Bskts</span><br>${totalBoxCount}<span style="font-size:9px;font-weight:400;color:#555;"> Boxes</span></div>`
+    : `<div style="font-size:20px;font-weight:900;color:#1a3a2a;">${totalBaskets}</div>`;
   const rowRates   = records.map(r=>(parseFloat(r.rate)||0)>0?(parseFloat(r.rate)||0):globalRate);
   const netWtDisplay = totalNetWt>0 ? totalNetWt.toFixed(1) : (parseFloat(totalWt)-totalBaskets).toFixed(1);
   const initTotal = rowRates.reduce((s,rr,i)=>{
@@ -5547,7 +5634,7 @@ function buildInvoiceHTML(data, forPrint=false){
       <td style="padding:${p};border:${rowBdr};color:${forPrint?'#000':'#333'};font-size:${fs};white-space:nowrap;background:${rowBg};">${formatDate(r.supplyDate)}</td>
       <td style="padding:${p};border:${rowBdr};color:${forPrint?'#000':'#166534'};font-weight:700;font-family:monospace;font-size:${fsM};background:${rowBg};white-space:nowrap;">${traceDisplay}</td>
       <td style="padding:${p};border:${rowBdr};color:${forPrint?'#000':'#333'};font-size:${fs};background:${rowBg};white-space:nowrap;">${r.variety||'—'}</td>
-      <td style="padding:${p};border:${rowBdr};text-align:center;font-weight:700;color:${forPrint?'#000':'#333'};font-size:${fs};background:${rowBg};white-space:nowrap;">${r.baskets||'—'}</td>
+      <td style="padding:${p};border:${rowBdr};text-align:center;font-weight:700;color:${forPrint?'#000':'#333'};font-size:${fs};background:${rowBg};white-space:nowrap;">${r.baskets?(r.packType==='box'?r.baskets+' Boxes':r.baskets+' Bskts'):'—'}</td>
       ${grossCell}${tareCell}${netCell}${rateCell}${amtCell}${remCell}
     </tr>`;
   }
@@ -5580,7 +5667,7 @@ function buildInvoiceHTML(data, forPrint=false){
             <th style="${thBase(`color:${forPrint?'#000':'#fff'};text-align:left;`)}">DATE</th>
             <th style="${thBase(`color:${forPrint?'#000':'#95d5b2'};text-align:left;`)}">TRACE NO.</th>
             <th style="${thBase(`color:${forPrint?'#000':'#fff'};text-align:left;`)}">VARIETY</th>
-            <th style="${thBase(`color:${forPrint?'#000':'#fff'};`)}">BSKTS</th>
+            <th style="${thBase(`color:${forPrint?'#000':'#fff'};`)}">PKG<br>QTY</th>
             ${cols.showGross?`<th style="${thBase(`color:${forPrint?'#000':'#ccc'};`)}">GROSS<br>KG</th>`:''}
             ${cols.showTare?`<th style="${thBase(`color:${forPrint?'#000':'#ccc'};`)}">TARE</th>`:''}
             ${cols.showNet?`<th style="${thBase(`color:${forPrint?'#000':'#90ef9a'};${forPrint?'':'background:rgba(82,183,136,0.15);'}`)}">NET<br>KG</th>`:''}
@@ -5593,7 +5680,7 @@ function buildInvoiceHTML(data, forPrint=false){
         <tfoot>
           <tr style="background:${forPrint?'#222':'linear-gradient(135deg,#1a3a2a,#1f4230)'};border-top:2px solid ${forPrint?'#555':'#40916c'};">
             <td colspan="4" style="padding:8px;font-weight:800;color:#fff;text-align:right;font-size:11px;">GRAND TOTAL</td>
-            <td style="padding:8px 6px;font-weight:800;color:#fff;text-align:center;">${totalBaskets}</td>
+            <td style="padding:8px 6px;font-weight:800;color:#fff;text-align:center;">${isMixed?`<div style="line-height:1.4;">${totalBsktCount}<span style="font-size:8px;font-weight:400;color:#aaa;"> Bskts</span><br>${totalBoxCount}<span style="font-size:8px;font-weight:400;color:#aaa;"> Boxes</span></div>`:totalBaskets}</td>
             ${cols.showGross?`<td style="padding:8px 6px;color:#ddd;text-align:center;font-size:10px;">${parseFloat(totalWt).toFixed(1)}</td>`:''}
             ${cols.showTare?`<td style="padding:8px 6px;color:#888;text-align:center;">—</td>`:''}
             ${cols.showNet?`<td style="padding:8px 6px;font-weight:800;color:#fff;text-align:center;">${netWtDisplay}</td>`:''}
@@ -5663,8 +5750,8 @@ function buildInvoiceHTML(data, forPrint=false){
         <div style="font-size:20px;font-weight:900;color:#1a3a2a;">${records.length}</div>
       </td>
       <td style="width:20%;padding:8px;text-align:center;border-right:1px solid #ccc;">
-        <div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Baskets</div>
-        <div style="font-size:20px;font-weight:900;color:#1a3a2a;">${totalBaskets}</div>
+        <div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">${isMixed?'Baskets / Boxes':packLabel}</div>
+        ${packCountDisplay}
       </td>
       <td style="width:20%;padding:8px;text-align:center;border-right:1px solid #ccc;">
         <div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Gross Wt</div>
@@ -5786,7 +5873,7 @@ ${recalcScript}`;
     <div style="padding:0 22px 12px;">
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:2px solid #1a3a2a;border-radius:8px;overflow:hidden;">
         <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Supplies</div><div style="font-size:22px;font-weight:900;color:#1a3a2a;">${records.length}</div></div>
-        <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Baskets</div><div style="font-size:22px;font-weight:900;color:#1a3a2a;">${totalBaskets}</div></div>
+        <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">${isMixed?'Baskets / Boxes':packLabel}</div>${packCountDisplay}</div>
         <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Gross Wt</div><div style="font-size:16px;font-weight:800;color:#888;">${parseFloat(totalWt).toFixed(1)}<span style="font-size:9px;"> kg</span></div></div>
         <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;background:#1a3a2a;"><div style="font-size:8px;font-weight:700;color:#74c69d;text-transform:uppercase;">Net Wt (Safi)</div><div style="font-size:16px;font-weight:800;color:#95d5b2;">${netWtDisplay}<span style="font-size:9px;"> kg</span></div></div>
         <div style="padding:10px 8px;text-align:center;background:linear-gradient(135deg,#d4a843,#c9a030);"><div style="font-size:8px;font-weight:700;color:#7a5a00;text-transform:uppercase;">Total Amount</div><div id="inv-grand-total" style="font-size:13px;font-weight:900;color:#1a3a2a;">${hasAmount?'Rs. '+Math.round(totalAmount).toLocaleString('en-PK'):'Pending'}</div></div>
@@ -6646,7 +6733,7 @@ function saveInvoice(){
   const _from=currentInvoiceData.range.from, _to=currentInvoiceData.range.to;
   // Duplicate check — same type + same period pehle se hai?
   const dupIdx=invoices.findIndex(x=>x.type===type && x.from===_from && x.to===_to);
-  const inv={id:dupIdx>=0?invoices[dupIdx].id:Date.now(),invNo:dupIdx>=0?(invoices[dupIdx].invNo||invNo):invNo,type:currentInvoiceData.range.type,label:currentInvoiceData.range.label,from:currentInvoiceData.range.from,to:currentInvoiceData.range.to,customers:currentInvoiceData.customers,totalSupplies:currentInvoiceData.records.length,totalBaskets:currentInvoiceData.totalBaskets,totalWt:currentInvoiceData.totalWt,totalNetWt:currentInvoiceData.totalNetWt||0,rate:currentInvoiceData.rate||0,totalAmount:parseFloat(document.getElementById('inv-amount').value)||currentInvoiceData.totalAmount||0,weightMode:currentInvoiceData.weightMode||'net',colVis:currentInvoiceData.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true},records:currentInvoiceData.records,savedAt:new Date().toISOString()};
+  const inv={id:dupIdx>=0?invoices[dupIdx].id:Date.now(),invNo:dupIdx>=0?(invoices[dupIdx].invNo||invNo):invNo,type:currentInvoiceData.range.type,label:currentInvoiceData.range.label,from:currentInvoiceData.range.from,to:currentInvoiceData.range.to,customers:currentInvoiceData.customers,totalSupplies:currentInvoiceData.records.length,totalBaskets:currentInvoiceData.totalBaskets,totalBoxes:currentInvoiceData.totalBoxes||0,totalBsktOnly:currentInvoiceData.totalBsktOnly||0,totalWt:currentInvoiceData.totalWt,totalNetWt:currentInvoiceData.totalNetWt||0,rate:currentInvoiceData.rate||0,totalAmount:parseFloat(document.getElementById('inv-amount').value)||currentInvoiceData.totalAmount||0,weightMode:currentInvoiceData.weightMode||'net',colVis:currentInvoiceData.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true},records:currentInvoiceData.records,savedAt:new Date().toISOString()};
   if(dupIdx>=0){
     invoices[dupIdx]=inv;save(KEYS.invoice,invoices);
     currentInvoiceData.invNo=inv.invNo;
@@ -6700,7 +6787,7 @@ function renderSavedInvoices(){
       <td style="font-size:11px;">${inv.label}</td>
       <td style="font-size:11px;">${inv.customers||'—'}</td>
       <td style="text-align:center;">${inv.totalSupplies}</td>
-      <td style="text-align:center;">${inv.totalBaskets}</td>
+      <td style="text-align:center;">${(inv.totalBoxes>0&&inv.totalBsktOnly>0)?`<span style="font-size:11px;">${inv.totalBsktOnly} Bskts<br>${inv.totalBoxes} Boxes</span>`:(inv.totalBoxes>0?inv.totalBoxes+' Boxes':inv.totalBaskets+' Bskts')}</td>
       <td style="text-align:center;font-weight:700;">${useWt.toFixed(1)} kg<br><span style="font-size:10px;color:var(--text3);">Net</span></td>
       <td style="text-align:center;">
         <input type="number" data-rate-inp="${inv.id}" value="${rate>0?rate:''}" placeholder="Rate/kg" min="0" step="0.01"
@@ -6918,8 +7005,7 @@ function renderTrash(){
     const info=item.type==='lettuce'?`Baskets: ${d.baskets||'—'} | Wt: ${d.totalWt||'—'} kg | ${d.customer||'—'}`:
                item.type==='fumigation'?`Variety: ${d.variety||'—'} | Area: ${d.area||'—'}`:
                item.type==='qar'?`Decision: ${d.decision||'—'} | ${d.remarks||''}`.slice(0,60):
-               item.type==='invoice'?`Rs. ${Math.round(d.totalAmount||0).toLocaleString('en-PK')} | Baskets: ${d.totalBaskets||'—'}`:'';
-    return `<tr>
+               item.type==='invoice'?`Rs. ${Math.round(d.totalAmount||0).toLocaleString('en-PK')} | ${(d.records&&d.records.some(r=>r.packType==='box'))?'Boxes':'Baskets'}: ${d.totalBaskets||'—'}`:'';    return `<tr>
       <td style="text-align:center;"><input type="checkbox" class="trash-chk" data-tid="${item.tid}" style="width:16px;height:16px;accent-color:var(--sage3);"></td>
       <td><span style="font-size:11px;font-weight:700;color:${col};">${getTrashTypeLabel(item.type)}</span></td>
       <td style="font-family:monospace;font-size:11px;color:var(--text2);">${getTrashItemTitle(item)}</td>
