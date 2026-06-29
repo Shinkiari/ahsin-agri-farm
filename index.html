@@ -1548,6 +1548,10 @@ document.addEventListener('DOMContentLoaded',function(){
   if(sessionStorage.getItem('agri_auth')==='yes'){
     setTimeout(fbSyncFromCloud, 600);
   }
+  // Apply saved defaults to Lettuce form on page load
+  setTimeout(function(){
+    if(typeof clearLettuceForm==='function') clearLettuceForm();
+  }, 100);
 });
 </script>
 
@@ -1824,7 +1828,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <div class="form-group" style="margin:0;">
             <label class="form-label" id="lbl-basket-wt">⚖ Basket Avg Wt</label>
             <div class="unit-wrap">
-              <input type="number" id="l-basket-wt" class="form-input" placeholder="11.5" step="0.1" value="11.5" oninput="this.dataset.boxset='1';calcTotalWeight()">
+              <input type="number" id="l-basket-wt" class="form-input" placeholder="11.5" step="0.1" oninput="this.dataset.boxset='1';calcTotalWeight()">
               <span class="unit-lbl">kg</span>
             </div>
           </div>
@@ -1839,7 +1843,7 @@ document.addEventListener('DOMContentLoaded',function(){
           <div class="form-group" style="margin:0;">
             <label class="form-label" id="lbl-basket-tare">⚖ Tare/Basket</label>
             <div class="unit-wrap">
-              <input type="number" id="l-basket-tare" class="form-input" placeholder="1.5" step="0.1" min="0" value="1.5" oninput="this.dataset.boxset='1';calcNetWeight();if((document.getElementById('l-pack-type')||{}).value==='box')calcTotalWeight()">
+              <input type="number" id="l-basket-tare" class="form-input" placeholder="1" step="0.1" min="0" oninput="this.dataset.boxset='1';calcNetWeight();if((document.getElementById('l-pack-type')||{}).value==='box')calcTotalWeight()">
               <span class="unit-lbl">kg</span>
             </div>
           </div>
@@ -2676,6 +2680,30 @@ document.addEventListener('DOMContentLoaded',function(){
           </div>
         </div>
 
+        <!-- Lettuce Supply Defaults -->
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:20px;">
+          <div style="font-weight:600;color:var(--mint);margin-bottom:6px;font-size:14px;">🧺 Lettuce Supply Defaults</div>
+          <p style="color:var(--text3);font-size:12px;margin:0 0 14px;line-height:1.6;">
+            Yeh values har baar naya form khulne par automatically fill ho jayengi. Ek dafa yahan set karein, baar baar change karna nahi padega.
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:420px;">
+            <div>
+              <label class="form-label">⚖ Basket Avg Wt (kg)</label>
+              <input type="number" id="def-basket-wt" class="form-input" placeholder="11.5" step="0.1" min="0" value="11.5">
+            </div>
+            <div>
+              <label class="form-label">📦 Tare / Basket (kg)</label>
+              <input type="number" id="def-basket-tare" class="form-input" placeholder="1" step="0.1" min="0" value="1">
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <button onclick="saveLettucDefaults()" style="background:var(--sage);color:#fff;border:none;padding:8px 20px;border-radius:7px;cursor:pointer;font-weight:700;font-size:13px;">
+              ✅ Save Defaults
+            </button>
+            <span id="def-save-msg" style="margin-left:10px;font-size:12px;color:var(--mint2);display:none;">✔ Saved!</span>
+          </div>
+        </div>
+
         <!-- Action Buttons -->
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button onclick="saveSystemSettings()" class="btn btn-primary" style="padding:10px 28px;">💾 Save Settings</button>
@@ -3365,9 +3393,11 @@ function clearLettuceForm(){
     document.getElementById('l-harvest-date').value=_lhd;
     onHarvestDateChange();
   }
-  document.getElementById('l-basket-tare').value='1.5';
+  const _defBasketWt = localStorage.getItem('aaf_def_basket_wt');
+  const _defBasketTare = localStorage.getItem('aaf_def_basket_tare');
+  document.getElementById('l-basket-tare').value = _defBasketTare !== null ? _defBasketTare : '1';
   document.getElementById('l-head-wt').value='400-600';
-  document.getElementById('l-basket-wt').value='11.5';
+  document.getElementById('l-basket-wt').value = _defBasketWt !== null ? _defBasketWt : '11.5';
   if(document.getElementById('l-pack-type')){document.getElementById('l-pack-type').value='basket';onPackTypeChange();}
   document.getElementById('l-variety').value='Iceberg Lettuce';
   document.getElementById('l-temp').value='4';
@@ -4195,6 +4225,25 @@ function renderSettingsPanel(){
   const cfg = getSystemCfg();
   updateAutoBackupStatusUI();
   renderCheckpointList();
+  loadLettucDefaultsToSettings();
+}
+
+function saveLettucDefaults(){
+  var wt = document.getElementById('def-basket-wt').value.trim();
+  var tare = document.getElementById('def-basket-tare').value.trim();
+  if(wt !== '') localStorage.setItem('aaf_def_basket_wt', wt);
+  if(tare !== '') localStorage.setItem('aaf_def_basket_tare', tare);
+  var msg = document.getElementById('def-save-msg');
+  msg.style.display = 'inline';
+  setTimeout(function(){ msg.style.display = 'none'; }, 2000);
+  toast('\u2705 Lettuce defaults saved! Agli dafa form automatically fill hoga.');
+}
+
+function loadLettucDefaultsToSettings(){
+  var wt = localStorage.getItem('aaf_def_basket_wt');
+  var tare = localStorage.getItem('aaf_def_basket_tare');
+  if(wt !== null) document.getElementById('def-basket-wt').value = wt;
+  if(tare !== null) document.getElementById('def-basket-tare').value = tare;
 }
 
 function saveSystemSettings(){
