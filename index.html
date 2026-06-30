@@ -3366,16 +3366,28 @@ function saveLettuce(isEdit=false,editId=null){
     remarks:document.getElementById('l-remarks').value.trim(),
   };
   if(!rec.supplyDate&&!rec.traceNo){toast('⚠️ Date ya Trace Number zaroor bharein!');return;}
+  if(rec.traceNo){
+    const dupIdx=records.findIndex(r=>r.traceNo===rec.traceNo && r.id!==rec.id);
+    if(dupIdx!==-1){
+      toast('❌ Yeh Traceability Number ('+rec.traceNo+') pehle se exist karta hai! Duplicate save nahi ho sakta.');
+      return;
+    }
+  }
   if(isEdit){const idx=records.findIndex(r=>r.id===editId);if(idx!==-1)records[idx]=rec;}
   else records.push(rec);
   save(KEYS.lettuce,records);
   // Auto-save daily invoice and monthly invoice only (QAR manual hai)
   if(rec.supplyDate){
-    autoSaveDailyInvoice(rec.supplyDate);
-    autoSaveMonthlyInvoice(rec.supplyDate.slice(0,7));
+    try{autoSaveDailyInvoice(rec.supplyDate);}catch(e){console.error('autoSaveDailyInvoice',e);}
+    try{autoSaveMonthlyInvoice(rec.supplyDate.slice(0,7));}catch(e){console.error('autoSaveMonthlyInvoice',e);}
   }
-  resequenceTraces();
-  resequenceInvoices(); clearLettuceForm(); renderLettuceTable(); renderSavedInvoices(); updateStats(); updateBadges();
+  try{resequenceTraces();}catch(e){console.error('resequenceTraces',e);}
+  try{resequenceInvoices();}catch(e){console.error('resequenceInvoices',e);}
+  try{renderLettuceTable();}catch(e){console.error('renderLettuceTable',e);}
+  try{renderSavedInvoices();}catch(e){console.error('renderSavedInvoices',e);}
+  try{updateStats();}catch(e){console.error('updateStats',e);}
+  try{updateBadges();}catch(e){console.error('updateBadges',e);}
+  try{clearLettuceForm();}catch(e){console.error('clearLettuceForm',e);}
   try{syncFarmsFromLettuce();}catch(e){}
   toast(isEdit?'✅ Record + Invoice update ho gaya!':'✅ Record aur Invoice save ho gaya!');
   autoCheckpoint();
@@ -3548,9 +3560,23 @@ function editLettuceRecord(id){
 }
 
 function deleteLettuceRecord(id){
-  if(!confirm('Trash mein bhejna chahte ho?'))return;
   const allLettuce=load(KEYS.lettuce);
   const rec=allLettuce.find(r=>r.id===id);
+  if(!rec)return;
+  // Check if record is older than 1 day (already shipped) — warn about trace number shift impact
+  const createdAt = rec.id ? new Date(Number(rec.id)) : null;
+  const isOld = createdAt && ((Date.now() - createdAt.getTime()) > 24*60*60*1000);
+  if(isOld){
+    const ok=confirm(
+      '⚠️ WARNING!\n\n'+
+      'Yeh record 1 din se purana hai (Trace: '+(rec.traceNo||'—')+', Supply: '+(rec.supplyDate||'—')+').\n\n'+
+      'Is shipment ki traceability number already dispatch ho chuki ho sakti hai. Delete karne se is k BAAD ki saari entries ke trace numbers shift/renumber ho jayenge, jo already-shipped invoices se match nahi karenge.\n\n'+
+      'Kya phir bhi Trash mein bhejna chahte ho?'
+    );
+    if(!ok)return;
+  } else {
+    if(!confirm('Trash mein bhejna chahte ho?'))return;
+  }
   if(rec) moveToTrash('lettuce',rec);
   save(KEYS.lettuce,allLettuce.filter(r=>r.id!==id));
   renderLettuceTable();updateStats();updateBadges();updateTrashBadge();toast('🗑 Trash mein chala gaya!');
@@ -3674,14 +3700,21 @@ function saveFumigation(isEdit=false,editId=null){
     remarks:document.getElementById('f-remarks').value.trim(),
   };
   if(!rec.traceNo&&!rec.seedingDate){toast('⚠️ Trace Number ya Seeding Date zaroor bharein!');return;}
+  if(rec.traceNo){
+    const dupIdx=records.findIndex(r=>r.traceNo===rec.traceNo && r.id!==rec.id);
+    if(dupIdx!==-1){
+      toast('❌ Yeh Traceability Number ('+rec.traceNo+') pehle se Fumigation mein exist karta hai! Duplicate save nahi ho sakta.');
+      return;
+    }
+  }
   if(isEdit){const idx=records.findIndex(r=>r.id===editId);if(idx!==-1)records[idx]=rec;}
   else records.push(rec);
   save(KEYS.fumigation,records);
-  resequenceTraces();
-  // Auto-update QAR — fumigation data se matching lettuce record ki QAR update karo
-  if(rec.traceNo){
-  }
-  clearFumigationForm();renderFumigationTable();updateStats();updateBadges();
+  try{resequenceTraces();}catch(e){console.error('resequenceTraces',e);}
+  try{renderFumigationTable();}catch(e){console.error('renderFumigationTable',e);}
+  try{updateStats();}catch(e){console.error('updateStats',e);}
+  try{updateBadges();}catch(e){console.error('updateBadges',e);}
+  try{clearFumigationForm();}catch(e){console.error('clearFumigationForm',e);}
   toast(isEdit?'✅ Record update ho gaya!':'✅ Fumigation record save ho gaya!');
 }
 
@@ -3781,9 +3814,22 @@ function editFumigationRecord(id){
 }
 
 function deleteFumigationRecord(id){
-  if(!confirm('Trash mein bhejna chahte ho?'))return;
   const allFum=load(KEYS.fumigation);
   const rec=allFum.find(r=>r.id===id);
+  if(!rec)return;
+  const createdAt = rec.id ? new Date(Number(rec.id)) : null;
+  const isOld = createdAt && ((Date.now() - createdAt.getTime()) > 24*60*60*1000);
+  if(isOld){
+    const ok=confirm(
+      '⚠️ WARNING!\n\n'+
+      'Yeh record 1 din se purana hai (Trace: '+(rec.traceNo||'—')+').\n\n'+
+      'Is shipment ki traceability number already dispatch ho chuki ho sakti hai. Delete karne se is k BAAD ki saari entries ke trace numbers shift/renumber ho jayenge, jo already-shipped invoices se match nahi karenge.\n\n'+
+      'Kya phir bhi Trash mein bhejna chahte ho?'
+    );
+    if(!ok)return;
+  } else {
+    if(!confirm('Trash mein bhejna chahte ho?'))return;
+  }
   if(rec) moveToTrash('fumigation',rec);
   save(KEYS.fumigation,allFum.filter(r=>r.id!==id));
   renderFumigationTable();updateStats();updateBadges();updateTrashBadge();toast('🗑 Trash mein chala gaya!');
@@ -5251,7 +5297,11 @@ function saveQar(isEdit=false,editId=null){
   if(!date){toast('⚠️ Date zaroor bharein!');return;}
   const rec={id:isEdit?editId:Date.now(),date,answers:{...qarAnswers},remarksPerItem:getQarRemarksPerItem(),decision:qarDecision,remarks:document.getElementById('q-remarks').value.trim()};
   if(isEdit){const idx=records.findIndex(r=>r.id===editId);if(idx!==-1)records[idx]=rec;}else records.push(rec);
-  save(KEYS.qar,records);clearQarForm();renderQarTable();updateStats();
+  save(KEYS.qar,records);
+  try{renderQarTable();}catch(e){console.error('renderQarTable',e);}
+  try{updateStats();}catch(e){console.error('updateStats',e);}
+  try{updateBadges();}catch(e){console.error('updateBadges',e);}
+  try{clearQarForm();}catch(e){console.error('clearQarForm',e);}
   toast(isEdit?'✅ QAR updated!':'✅ QAR saved!');
 }
 function cancelQarEdit(){
