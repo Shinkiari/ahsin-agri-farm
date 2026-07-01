@@ -2703,11 +2703,59 @@ document.addEventListener('DOMContentLoaded',function(){
               <input type="number" id="def-basket-tare" class="form-input" placeholder="1" step="0.1" min="0" value="1">
             </div>
           </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:420px;margin-top:14px;">
+            <div>
+              <label class="form-label">📦 Box Wt (Gross) (kg)</label>
+              <input type="number" id="def-box-wt" class="form-input" placeholder="24" step="0.1" min="0" value="24">
+            </div>
+            <div>
+              <label class="form-label">📦 Tare / Box (kg)</label>
+              <input type="number" id="def-box-tare" class="form-input" placeholder="1" step="0.1" min="0" value="1">
+            </div>
+          </div>
           <div style="margin-top:12px;">
             <button onclick="saveLettucDefaults()" style="background:var(--sage);color:#fff;border:none;padding:8px 20px;border-radius:7px;cursor:pointer;font-weight:700;font-size:13px;">
               ✅ Save Defaults
             </button>
             <span id="def-save-msg" style="margin-left:10px;font-size:12px;color:var(--mint2);display:none;">✔ Saved!</span>
+          </div>
+        </div>
+
+        <!-- Bulk Update by Month -->
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:20px;">
+          <div style="font-weight:600;color:var(--mint);margin-bottom:6px;font-size:14px;">📅 Bulk Update Weight/Tare by Month</div>
+          <p style="color:var(--text3);font-size:12px;margin:0 0 14px;line-height:1.6;">
+            Kisi specific month ke saare Lettuce Supply records ka Basket/Box Avg Weight aur Tare ek click mein badlein. Gross/Net weight automatically recalculate ho jayenge.
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:520px;">
+            <div>
+              <label class="form-label">🗓 Month</label>
+              <select id="bulk-month" class="form-input"></select>
+            </div>
+            <div>
+              <label class="form-label">📦 Packaging Type</label>
+              <select id="bulk-pack-type" class="form-input">
+                <option value="basket">🧺 Basket records only</option>
+                <option value="box">📦 Box records only</option>
+                <option value="both">🔁 Both (Basket + Box)</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:520px;margin-top:12px;">
+            <div>
+              <label class="form-label">⚖ New Avg Weight (kg)</label>
+              <input type="number" id="bulk-new-wt" class="form-input" placeholder="e.g. 11.5 or 24" step="0.1" min="0">
+            </div>
+            <div>
+              <label class="form-label">📦 New Tare (kg)</label>
+              <input type="number" id="bulk-new-tare" class="form-input" placeholder="e.g. 1" step="0.1" min="0">
+            </div>
+          </div>
+          <div id="bulk-preview" style="margin-top:12px;font-size:12px;color:var(--text3);"></div>
+          <div style="margin-top:12px;">
+            <button onclick="applyBulkLettuceUpdate()" style="background:#e67e22;color:#fff;border:none;padding:8px 20px;border-radius:7px;cursor:pointer;font-weight:700;font-size:13px;">
+              ⚡ Apply to Month
+            </button>
           </div>
         </div>
 
@@ -4284,8 +4332,12 @@ function renderSettingsPanel(){
 function saveLettucDefaults(){
   var wt = document.getElementById('def-basket-wt').value.trim();
   var tare = document.getElementById('def-basket-tare').value.trim();
+  var boxWt = document.getElementById('def-box-wt').value.trim();
+  var boxTare = document.getElementById('def-box-tare').value.trim();
   if(wt !== '') localStorage.setItem('aaf_def_basket_wt', wt);
   if(tare !== '') localStorage.setItem('aaf_def_basket_tare', tare);
+  if(boxWt !== '') localStorage.setItem('aaf_def_box_wt', boxWt);
+  if(boxTare !== '') localStorage.setItem('aaf_def_box_tare', boxTare);
   var msg = document.getElementById('def-save-msg');
   msg.style.display = 'inline';
   setTimeout(function(){ msg.style.display = 'none'; }, 2000);
@@ -4295,8 +4347,98 @@ function saveLettucDefaults(){
 function loadLettucDefaultsToSettings(){
   var wt = localStorage.getItem('aaf_def_basket_wt');
   var tare = localStorage.getItem('aaf_def_basket_tare');
+  var boxWt = localStorage.getItem('aaf_def_box_wt');
+  var boxTare = localStorage.getItem('aaf_def_box_tare');
   if(wt !== null) document.getElementById('def-basket-wt').value = wt;
   if(tare !== null) document.getElementById('def-basket-tare').value = tare;
+  if(boxWt !== null) document.getElementById('def-box-wt').value = boxWt;
+  if(boxTare !== null) document.getElementById('def-box-tare').value = boxTare;
+  populateBulkMonthDropdown();
+}
+
+function populateBulkMonthDropdown(){
+  const sel = document.getElementById('bulk-month');
+  if(!sel) return;
+  const records = load(KEYS.lettuce) || [];
+  const months = [...new Set(records.map(r=>(r.supplyDate||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  if(!months.length){
+    sel.innerHTML = '<option value="">-- Koi record nahi --</option>';
+    return;
+  }
+  const monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  sel.innerHTML = '<option value="">-- Month select karo --</option>' + months.map(m=>{
+    const [y,mo] = m.split('-');
+    const label = monthNames[parseInt(mo,10)] + ' ' + y;
+    return `<option value="${m}">${label}</option>`;
+  }).join('');
+  sel.onchange = updateBulkPreview;
+  document.getElementById('bulk-pack-type').onchange = updateBulkPreview;
+}
+
+function updateBulkPreview(){
+  const month = document.getElementById('bulk-month').value;
+  const packType = document.getElementById('bulk-pack-type').value;
+  const preview = document.getElementById('bulk-preview');
+  if(!month){ preview.textContent = ''; return; }
+  const records = load(KEYS.lettuce) || [];
+  const matching = records.filter(r=>{
+    if((r.supplyDate||'').slice(0,7) !== month) return false;
+    const rpt = r.packType || 'basket';
+    if(packType === 'both') return true;
+    return rpt === packType;
+  });
+  preview.textContent = matching.length
+    ? `🔎 ${matching.length} record(s) is month/type ke match karte hain. Apply dabane se yeh sab update ho jayenge.`
+    : `⚠ Is month/type ke koi records nahi milay.`;
+}
+
+function applyBulkLettuceUpdate(){
+  const month = document.getElementById('bulk-month').value;
+  const packType = document.getElementById('bulk-pack-type').value;
+  const newWtRaw = document.getElementById('bulk-new-wt').value.trim();
+  const newTareRaw = document.getElementById('bulk-new-tare').value.trim();
+
+  if(!month){ toast('⚠ Pehle month select karein.'); return; }
+  if(newWtRaw === '' && newTareRaw === ''){ toast('⚠ Naya Weight ya Tare daalein.'); return; }
+
+  const newWt = newWtRaw !== '' ? parseFloat(newWtRaw) : null;
+  const newTare = newTareRaw !== '' ? parseFloat(newTareRaw) : null;
+  if(newWt !== null && (isNaN(newWt) || newWt <= 0)){ toast('⚠ Weight valid number honi chahiye.'); return; }
+  if(newTare !== null && (isNaN(newTare) || newTare < 0)){ toast('⚠ Tare valid number honi chahiye.'); return; }
+
+  const records = load(KEYS.lettuce) || [];
+  let count = 0;
+  const updated = records.map(r=>{
+    if((r.supplyDate||'').slice(0,7) !== month) return r;
+    const rpt = r.packType || 'basket';
+    if(packType !== 'both' && rpt !== packType) return r;
+
+    const rec = Object.assign({}, r);
+    if(newWt !== null) rec.basketWt = newWt;
+    if(newTare !== null) rec.basketTare = newTare;
+
+    const baskets = parseFloat(rec.baskets) || 0;
+    const wt = parseFloat(rec.basketWt) || 0;
+    const tare = parseFloat(rec.basketTare) || 0;
+    if(baskets > 0 && wt > 0){
+      const gross = baskets * wt;
+      const net = gross - (baskets * tare);
+      rec.totalWt = gross.toFixed(1);
+      rec.netWt = (net > 0 ? net : 0).toFixed(1);
+    }
+    count++;
+    return rec;
+  });
+
+  if(count === 0){ toast('⚠ Is month/type ke koi records nahi milay.'); return; }
+
+  if(!confirm(`${count} record(s) update honge — Weight/Tare badal kar Gross/Net dobara calculate honge. Confirm karein?`)) return;
+
+  save(KEYS.lettuce, updated);
+  renderLettuceTable();
+  toast(`✅ ${count} record(s) update ho gaye!`);
+  updateBulkPreview();
+  if(typeof updateBadges === 'function') updateBadges();
 }
 
 function saveSystemSettings(){
@@ -5041,7 +5183,11 @@ function openLettuceDD(){
   if(!panel)return;
   const isOpen=panel.style.display==='block';
   panel.style.display=isOpen?'none':'block';
-  if(!isOpen){const si=document.getElementById('f-lettuce-search');if(si){si.value='';si.focus();}renderLettuceDDItems('');}
+  if(!isOpen){
+    // Har baar fresh filter karo — stale list bug fix
+    populateLettuceFillDropdown();
+    const si=document.getElementById('f-lettuce-search');if(si){si.value='';si.focus();}
+  }
 }
 document.addEventListener('click',function(e){
   const dd=document.getElementById('f-lettuce-dd');
@@ -5049,7 +5195,12 @@ document.addEventListener('click',function(e){
 });
 function populateLettuceFillDropdown(){
   const allL=load(KEYS.lettuce);
+  // Current edit mode mein jo fumigation record edit ho raha hai, uska traceNo exclude mat karo
+  // Taake edit mode mein bhi linked lettuce record dropdown mein dikhe
+  const currentFumTrace=(document.getElementById('f-trace')||{}).value||'';
   const fumTraces=new Set(load(KEYS.fumigation).map(f=>(f.traceNo||'').trim()).filter(Boolean));
+  // Agar edit mode mein hain to current traceNo filter se hata do
+  if(currentFumTrace.trim()) fumTraces.delete(currentFumTrace.trim());
   _lettuceAllRecords=allL.filter(r=>!r.traceNo||!fumTraces.has(r.traceNo.trim()));
   renderLettuceDDItems('');
 }
@@ -7259,10 +7410,12 @@ function onPackTypeChange(){
     if(tagN){tagN.textContent='Auto';}
     document.getElementById('l-total-wt').removeAttribute('readonly');
     document.getElementById('l-total-wt').placeholder='Auto...';
-    document.getElementById('l-basket-wt').placeholder='24';
+    const _defBoxWt = localStorage.getItem('aaf_def_box_wt') || '24';
+    const _defBoxTare = localStorage.getItem('aaf_def_box_tare') || '1';
+    document.getElementById('l-basket-wt').placeholder=_defBoxWt;
     // Sirf tab default set karo jab boxset flag nahi — yani fresh switch
-    if(!document.getElementById('l-basket-wt').dataset.boxset){document.getElementById('l-basket-wt').value='24';}
-    if(!document.getElementById('l-basket-tare').dataset.boxset){document.getElementById('l-basket-tare').value='1';}
+    if(!document.getElementById('l-basket-wt').dataset.boxset){document.getElementById('l-basket-wt').value=_defBoxWt;}
+    if(!document.getElementById('l-basket-tare').dataset.boxset){document.getElementById('l-basket-tare').value=_defBoxTare;}
     // Ab flag set karo
     document.getElementById('l-basket-wt').dataset.boxset='1';
     document.getElementById('l-basket-tare').dataset.boxset='1';
