@@ -260,6 +260,45 @@ body {
 }
 
 /* ═══════════════════════════════════
+   TOPBAR DATA MENU (moved from sidebar footer)
+═══════════════════════════════════ */
+.topbar-data-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.topbar-data-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: var(--r);
+  font-size: 12.5px; font-weight: 700;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text2);
+  font-family: var(--font); transition: all 0.15s;
+  white-space: nowrap;
+}
+.topbar-data-btn:hover { background: var(--surface3); color: var(--text); border-color: rgba(82,183,136,0.35); }
+.topbar-data-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 210px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+  padding: 8px;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 200;
+}
+.topbar-data-panel.show { display: flex; }
+.topbar-data-panel .footer-btn { width: 100%; }
+@media (max-width: 640px) {
+  .topbar-data-btn span.td-label { display: none; }
+  .topbar-data-panel { min-width: 190px; }
+}
+
+/* ═══════════════════════════════════
    STATS STRIP
 ═══════════════════════════════════ */
 .stats-strip {
@@ -1503,6 +1542,7 @@ async function fbSyncFromCloud(){
   if(typeof renderQarTable==='function')        renderQarTable();
   if(typeof renderSavedInvoices==='function')   renderSavedInvoices();
   if(typeof renderFarmsTable==='function')      renderFarmsTable();
+  if(typeof renderDeliveryTable==='function')   renderDeliveryTable();
   if(typeof updateStats==='function')           updateStats();
   if(typeof updateBadges==='function')          updateBadges();
 }
@@ -1607,6 +1647,10 @@ document.addEventListener('DOMContentLoaded',function(){
       <span class="nav-icon">🏷️</span>
       Label Print
     </div>
+    <div class="nav-item" id="nav-delivery" onclick="switchTab('delivery', this)">
+      <span class="nav-icon">🚚</span>
+      Delivery Note
+    </div>
     <div class="nav-item" id="nav-letterhead" onclick="switchTab('letterhead', this)">
       <span class="nav-icon">📄</span>
       Letter Head
@@ -1629,17 +1673,6 @@ document.addEventListener('DOMContentLoaded',function(){
     </div>
   </div>
 
-  <div class="sidebar-footer">
-    <button class="footer-btn" onclick="downloadBackup()">⬇ Backup JSON</button>
-    <label class="footer-btn" style="cursor:pointer;" title="Sab kuch replace ho jaega">
-      ⬆ Restore (Replace) <input type="file" accept=".json" onchange="uploadBackup(event)" style="display:none">
-    </label>
-    <label class="footer-btn" style="cursor:pointer;color:#74c69d;border-color:rgba(82,183,136,0.35);" title="Sirf nayi entries add hongi, duplicates skip">
-      ⚡ Merge Backup <input type="file" accept=".json" onchange="uploadMergeBackup(event)" style="display:none">
-    </label>
-    <button class="footer-btn" onclick="logoutApp()" style="color:#74c69d;border-color:rgba(82,183,136,0.3);">🔒 Logout (+ Backup)</button>
-    <button class="footer-btn danger" onclick="clearAllData()">🗑 Clear All Data</button>
-  </div>
 </aside>
 
 <!-- ═══ MAIN ═══ -->
@@ -1653,6 +1686,21 @@ document.addEventListener('DOMContentLoaded',function(){
       <div class="topbar-subtitle" id="topbar-sub">Premium Database Management System</div>
     </div>
     <span id="sync-status-badge" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(82,183,136,0.12);border:1px solid rgba(82,183,136,0.25);color:#52b788;white-space:nowrap;">☁️ Synced</span>
+
+    <div class="topbar-data-wrap" id="topbar-data-wrap">
+      <button class="topbar-data-btn" onclick="toggleDataMenu(event)">⚙️ <span class="td-label">Data</span></button>
+      <div class="topbar-data-panel" id="topbar-data-panel">
+        <button class="footer-btn" onclick="downloadBackup();closeDataMenu();">⬇ Backup JSON</button>
+        <label class="footer-btn" style="cursor:pointer;" title="Sab kuch replace ho jaega">
+          ⬆ Restore (Replace) <input type="file" accept=".json" onchange="uploadBackup(event);closeDataMenu();" style="display:none">
+        </label>
+        <label class="footer-btn" style="cursor:pointer;color:#74c69d;border-color:rgba(82,183,136,0.35);" title="Sirf nayi entries add hongi, duplicates skip">
+          ⚡ Merge Backup <input type="file" accept=".json" onchange="uploadMergeBackup(event);closeDataMenu();" style="display:none">
+        </label>
+        <button class="footer-btn" onclick="logoutApp();closeDataMenu();" style="color:#74c69d;border-color:rgba(82,183,136,0.3);">🔒 Logout (+ Backup)</button>
+        <button class="footer-btn danger" onclick="clearAllData();closeDataMenu();">🗑 Clear All Data</button>
+      </div>
+    </div>
   </header>
 
   <!-- STATS -->
@@ -1721,25 +1769,25 @@ document.addEventListener('DOMContentLoaded',function(){
         </div>
         <!-- ── Section 1: Dates ── -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="harvestDate">
             <label class="form-label">🌾 Harvesting Date</label>
             <input type="date" id="l-harvest-date" class="form-input" onchange="onHarvestDateChange()">
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="supplyDate">
             <label class="form-label">🚚 Supply Date</label>
-            <input type="date" id="l-supply-date" class="form-input" onchange="autoExpiryFromSupply()">
+            <input type="date" id="l-supply-date" class="form-input" onchange="autoExpiryFromSupply();applyLettuceFieldVisibility()">
           </div>
         </div>
 
         <!-- ── Section 2: Location + Plot + Trace ── -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="location">
             <label class="form-label">📍 Farm Location</label>
             <select id="l-location" class="form-input" onchange="onFarmLocationChange()">
               <option value="">— Farm Select Karo —</option>
             </select>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="plot">
             <label class="form-label">🔢 Plot No. (Farm)</label>
             <select id="l-plot" class="form-input" onchange="onPlotChange(this.value)">
               <option value="">-- Select Farm --</option>
@@ -1748,7 +1796,7 @@ document.addEventListener('DOMContentLoaded',function(){
         </div>
 
         <!-- ── Trace full width ── -->
-        <div class="form-group" style="margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:10px;" data-lfield="trace">
           <label class="form-label">🔍 Traceability No. <span class="auto-tag">— Auto</span></label>
           <div class="trace-wrap">
             <input type="text" id="l-trace" class="form-input" placeholder="AAF-A25/P1-260426-001">
@@ -1763,7 +1811,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
         <!-- ── Section 3: Variety + District + Temp + Harvest Time ── -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="variety">
             <label class="form-label">🥬 Variety</label>
             <input type="text" id="l-variety" class="form-input" placeholder="Iceberg Lettuce" value="Iceberg Lettuce" list="variety-list" autocomplete="off">
             <datalist id="variety-list">
@@ -1774,11 +1822,11 @@ document.addEventListener('DOMContentLoaded',function(){
               <option value="Butterhead Lettuce">
             </datalist>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="temp">
             <label class="form-label">🌡 Temp (°C)</label>
             <input type="number" id="l-temp" class="form-input" placeholder="4" value="4" step="0.1" min="0" max="10">
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="district">
             <label class="form-label">📍 District / Country</label>
             <input type="text" id="l-district" class="form-input" placeholder="Mansehra, Pakistan" value="Mansehra, Pakistan" list="district-list" autocomplete="off">
             <datalist id="district-list">
@@ -1788,7 +1836,7 @@ document.addEventListener('DOMContentLoaded',function(){
               <option value="Islamabad, Pakistan">
             </datalist>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="harvestTime">
             <label class="form-label">⏰ Harvest Time</label>
             <div class="inline-time-wrap" style="gap:4px;">
               <select id="l-harvest-hour" style="flex:1;min-width:0;">
@@ -1810,7 +1858,7 @@ document.addEventListener('DOMContentLoaded',function(){
         </div>
 
         <!-- ── Section 4: Weights ── -->
-        <div class="form-group" style="margin:0 0 10px 0;">
+        <div class="form-group" style="margin:0 0 10px 0;" data-lfield="packType">
           <label class="form-label">📦 Packaging Type</label>
           <select id="l-pack-type" class="form-input" onchange="onPackTypeChange()">
             <option value="basket">🧺 Basket (auto weight)</option>
@@ -1818,36 +1866,36 @@ document.addEventListener('DOMContentLoaded',function(){
           </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="headWt">
             <label class="form-label">🧺 Avg Head Wt</label>
             <div class="unit-wrap">
               <input type="text" id="l-head-wt" class="form-input" placeholder="400-600" value="400-600">
               <span class="unit-lbl">g</span>
             </div>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="basketWt">
             <label class="form-label" id="lbl-basket-wt">⚖ Basket Avg Wt</label>
             <div class="unit-wrap">
               <input type="number" id="l-basket-wt" class="form-input" placeholder="11.5" step="0.1" oninput="this.dataset.boxset='1';calcTotalWeight()">
               <span class="unit-lbl">kg</span>
             </div>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="baskets">
             <label class="form-label" id="lbl-baskets">🧮 Total Baskets</label>
             <input type="number" id="l-baskets" class="form-input" placeholder="e.g. 250" step="1" oninput="calcTotalWeight()">
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="grossWt">
             <label class="form-label">📦 Gross Wt <span class="auto-tag" id="tag-total-wt">Auto</span></label>
             <input type="number" id="l-total-wt" class="form-input" placeholder="Auto..." step="0.1" oninput="calcNetWeight()" style="background:rgba(82,183,136,0.06);border-color:rgba(82,183,136,0.25);">
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="basketTare">
             <label class="form-label" id="lbl-basket-tare">⚖ Tare/Basket</label>
             <div class="unit-wrap">
               <input type="number" id="l-basket-tare" class="form-input" placeholder="1" step="0.1" min="0" oninput="this.dataset.boxset='1';calcNetWeight();if((document.getElementById('l-pack-type')||{}).value==='box')calcTotalWeight()">
               <span class="unit-lbl">kg</span>
             </div>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="netWt">
             <label class="form-label">✅ Net Wt (Safi) <span class="auto-tag" id="tag-net-wt">Auto</span></label>
             <div class="unit-wrap">
               <input type="number" id="l-net-wt" class="form-input" placeholder="Auto..." step="0.1" oninput="onNetManual()" style="background:rgba(82,183,136,0.08);border-color:rgba(82,183,136,0.35);color:var(--mint);font-weight:700;">
@@ -1858,7 +1906,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
         <!-- ── Section 5: Best Before + Expiry ── -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="bestBefore">
             <label class="form-label">📅 Best Before</label>
             <div class="inline-date-wrap" style="gap:4px;">
               <select id="l-bb-day" onchange="syncExpiry()" style="flex:1;min-width:0;">
@@ -1883,7 +1931,7 @@ document.addEventListener('DOMContentLoaded',function(){
               </select>
             </div>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="expiry">
             <label class="form-label">⚠ Expiry Date <span class="auto-tag">Auto</span></label>
             <div class="inline-date-wrap" style="gap:4px;">
               <select id="l-exp-day" style="flex:1;min-width:0;">
@@ -1912,7 +1960,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
         <!-- ── Section 6: Fumigation + Pesticide + MSDS + Customer + Rate ── -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="fumigation">
             <label class="form-label">🌿 Fumigation</label>
             <select id="l-fumigation" class="form-input">
               <option value="">-- Select --</option>
@@ -1920,7 +1968,7 @@ document.addEventListener('DOMContentLoaded',function(){
               <option value="No">No</option>
             </select>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="msds">
             <label class="form-label">🧪 MSDS</label>
             <select id="l-msds" class="form-input">
               <option value="">-- Select --</option>
@@ -1928,11 +1976,11 @@ document.addEventListener('DOMContentLoaded',function(){
               <option value="No">No</option>
             </select>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="pesticide">
             <label class="form-label">💊 Pesticide</label>
             <input type="text" id="l-pesticide" class="form-input" placeholder="Type or select..." list="pesticide-list" autocomplete="off">
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group" style="margin:0;" data-lfield="rate">
             <label class="form-label">💰 Rate/kg</label>
             <div class="unit-wrap">
               <input type="number" id="l-rate" class="form-input" placeholder="e.g. 120" step="0.01" min="0">
@@ -1942,14 +1990,14 @@ document.addEventListener('DOMContentLoaded',function(){
         </div>
 
         <!-- ── Customer full width ── -->
-        <div class="form-group" style="margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:10px;" data-lfield="customer">
           <label class="form-label">🏢 Customer</label>
           <input type="text" id="l-customer" class="form-input" placeholder="Anchor Commodities Pvt Ltd" list="customer-list" autocomplete="off" value="Anchor Commodities Pvt Ltd">
           <datalist id="customer-list"><option value="Anchor Commodities Pvt Ltd"></datalist>
         </div>
 
         <!-- ── Remarks full width ── -->
-        <div class="form-group" style="margin-bottom:12px;">
+        <div class="form-group" style="margin-bottom:12px;" data-lfield="remarks">
           <label class="form-label">📝 Remarks</label>
           <textarea id="l-remarks" class="form-input" placeholder="e.g. In Dry controlled Environment..." rows="2" style="resize:vertical;min-height:52px;"></textarea>
         </div>
@@ -2462,8 +2510,9 @@ document.addEventListener('DOMContentLoaded',function(){
           <div style="flex:1;min-width:240px;">
             <div style="font-size:11px;color:var(--sage3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👁 Columns:</div>
             <div class="col-toggle-wrap">
-              <label class="col-toggle-label"><input type="checkbox" id="col-gross" checked onchange="applyRatesAndRefresh()"> Gross Wt</label>
-              <label class="col-toggle-label"><input type="checkbox" id="col-tare" checked onchange="applyRatesAndRefresh()"> Tare</label>
+              <label class="col-toggle-label"><input type="checkbox" id="col-gross" onchange="applyRatesAndRefresh()"> Gross Wt</label>
+              <label class="col-toggle-label"><input type="checkbox" id="col-avgwt" checked onchange="applyRatesAndRefresh()"> Avg Wt/Basket</label>
+              <label class="col-toggle-label"><input type="checkbox" id="col-tare" onchange="applyRatesAndRefresh()"> Tare</label>
               <label class="col-toggle-label"><input type="checkbox" id="col-net" checked onchange="applyRatesAndRefresh()"> Net Wt</label>
               <label class="col-toggle-label"><input type="checkbox" id="col-remarks" checked onchange="applyRatesAndRefresh()"> Remarks</label>
             </div>
@@ -2759,6 +2808,20 @@ document.addEventListener('DOMContentLoaded',function(){
           </div>
         </div>
 
+        <!-- Lettuce Form Field Visibility -->
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;margin-bottom:20px;">
+          <div style="font-weight:600;color:var(--mint);margin-bottom:6px;font-size:14px;">👁 Lettuce Entry Form — Field On/Off (Month-wise)</div>
+          <p style="color:var(--text3);font-size:12px;margin:0 0 14px;line-height:1.6;">
+            Har field ke liye ek month select karein aur "Is Month Se OFF" ya "Is Month Se ON" dabayein. Yeh sirf usi mahine se aage ke naye/edit record par apply hoga — <b>pichle mahinon ka already-saved data untouched rahega</b> (jaise agar July se OFF karein to sirf July (aur uske baad) ke records se field ghayab hogi, June ya usse pehle ke records apni jagah waisi hi dikhengi). Future mein kisi bhi mahine se dobara ON/OFF karna ho to wahi process dobara karein — ek se zyada schedule bhi ban sakte hain.
+          </p>
+          <div id="lettuce-field-toggles" style="display:flex;flex-direction:column;gap:10px;"></div>
+          <div style="margin-top:14px;">
+            <button onclick="resetLettuceFieldVis()" style="background:rgba(255,255,255,0.08);color:var(--text2);border:1px solid rgba(255,255,255,0.15);padding:8px 18px;border-radius:7px;cursor:pointer;font-weight:700;font-size:13px;">
+              🔄 Saari Fields, Saare Months Ke Liye Reset (Hamesha ON)
+            </button>
+          </div>
+        </div>
+
         <!-- Action Buttons -->
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button onclick="saveSystemSettings()" class="btn btn-primary" style="padding:10px 28px;">💾 Save Settings</button>
@@ -2937,6 +3000,91 @@ document.addEventListener('DOMContentLoaded',function(){
       </div>
     </div>
 
+    <!-- DELIVERY NOTE PANEL -->
+    <div id="panel-delivery" class="panel">
+      <div class="card">
+        <div class="card-title">
+          <div class="ct-icon">🚚</div>
+          Delivery Note Generator
+        </div>
+
+        <div class="autofill-box">
+          <div class="autofill-box-title">🔗 Lettuce Record se sirf Traceability No. Auto Fill</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:220px;position:relative;">
+              <div id="dn-lettuce-selected" onclick="openDNLettuceDD()"
+                style="background:rgba(10,22,16,0.6);border:1px solid rgba(82,183,136,0.2);border-radius:var(--r);padding:9px 36px 9px 12px;color:var(--text-dim);font-family:var(--font);font-size:13px;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;">
+                — Koi record select karein —
+                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--sage3);font-size:10px;pointer-events:none;">▼</span>
+              </div>
+              <div id="dn-lettuce-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);z-index:9999;box-shadow:var(--sh-lg);">
+                <div style="padding:7px 9px;border-bottom:1px solid var(--border2);">
+                  <input id="dn-lettuce-search" type="text" placeholder="🔍 Trace No, Date type karein..."
+                    oninput="filterDNLettuceDD(this.value)"
+                    style="width:100%;background:rgba(10,22,16,0.6);border:1px solid rgba(82,183,136,0.2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;">
+                </div>
+                <div id="dn-lettuce-list" style="max-height:200px;overflow-y:auto;"></div>
+              </div>
+            </div>
+            <input type="hidden" id="dn-lettuce-id" value="">
+            <button class="btn-auto" onclick="autoFillDNTrace()" style="padding:9px 16px;font-size:12px;">⚡ Trace No Fill Karo</button>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group"><label>Delivery Note No.</label><input type="text" id="dn-no" placeholder="e.g. 001"></div>
+          <div class="form-group"><label>Date</label><input type="date" id="dn-date"></div>
+          <div class="form-group"><label>Customer's Name</label><input type="text" id="dn-customer" value="Anchor Commodities Pvt Ltd."></div>
+          <div class="form-group"><label>City</label><input type="text" id="dn-city" value="Lahore"></div>
+          <div class="form-group"><label>Branch</label><input type="text" id="dn-branch"></div>
+          <div class="form-group"><label>Temp. °C</label><input type="text" id="dn-temp" placeholder="e.g. 2-4"></div>
+          <div class="form-group"><label>Box/Boxes</label><input type="text" id="dn-boxes"></div>
+          <div class="form-group"><label>Kgs.</label><input type="text" id="dn-kgs"></div>
+          <div class="form-group"><label>Traceability No.</label><input type="text" id="dn-trace" placeholder="e.g. AAF-A25/P1-260429-006"></div>
+        </div>
+
+        <div class="form-actions" style="margin-top:18px;">
+          <button class="btn btn-primary" onclick="saveDeliveryNote()">💾 Save Record</button>
+          <button class="btn btn-primary" onclick="openDeliveryNotePrint()">🖨 Print (3 Copies / Page)</button>
+          <button class="btn btn-outline" onclick="previewDeliveryNote()">👁 Preview</button>
+          <button class="btn btn-outline" onclick="clearDeliveryForm()">✖ Clear</button>
+          <button class="btn btn-outline" id="btn-cancel-delivery" style="display:none;background:rgba(220,53,69,0.12);border-color:rgba(220,53,69,0.4);color:#ff6b6b;" onclick="cancelDeliveryEdit()">✖ Cancel Edit</button>
+        </div>
+      </div>
+
+      <div class="card" id="dn-preview-card" style="display:none;">
+        <div class="card-title">
+          <div class="ct-icon">👁</div>
+          Delivery Note Preview
+        </div>
+        <div style="display:flex;justify-content:center;padding:20px 0;overflow:auto;">
+          <div id="dn-preview-box"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;"><div class="ct-icon">📋</div>Saved Delivery Notes</div>
+        </div>
+        <div class="search-bar-row">
+          <input type="text" id="dn-search" placeholder="Search by No, customer, trace no, date..." oninput="renderDeliveryTable()">
+        </div>
+        <div class="records-badge" id="dn-count"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>No.</th><th style="min-width:96px;white-space:nowrap;">Date</th><th>Customer</th><th>Trace No.</th><th>Boxes</th><th>Kgs.</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="delivery-tbody">
+              <tr><td colspan="8" class="empty-msg">No records found. Save using the form above.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- LETTER HEAD PANEL -->
     <div id="panel-letterhead" class="panel" style="display:none;">
       <div class="section-card">
@@ -3093,6 +3241,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
 <script>
 // ══════════════════════════════════════
 // SIDEBAR MOBILE
@@ -3109,7 +3258,7 @@ function closeSidebar(){
 // ══════════════════════════════════════
 // DATA LAYER
 // ══════════════════════════════════════
-const KEYS = { lettuce:'aaf_lettuce', fumigation:'aaf_fumigation', qar:'aaf_qar', invoice:'aaf_invoices', trash:'aaf_trash', rateHistory:'aaf_rate_history', basketReturn:'aaf_basket_return', farms:'aaf_farms' };
+const KEYS = { lettuce:'aaf_lettuce', fumigation:'aaf_fumigation', qar:'aaf_qar', invoice:'aaf_invoices', trash:'aaf_trash', rateHistory:'aaf_rate_history', basketReturn:'aaf_basket_return', farms:'aaf_farms', delivery:'aaf_delivery' };
 let currentRecord = null, currentRecordType = null;
 // ═══ DATABASE: LocalStorage + Firebase Cloud Sync ═══
 function load(k){
@@ -3122,6 +3271,166 @@ function save(k,d){
     if(typeof fbPush==='function') fbPush(k,d);
   }catch(e){ console.warn('save error:',e); }
 }
+
+// ══════════════════════════════════════
+// LETTUCE FIELD VISIBILITY (month-based scheduling system)
+// ══════════════════════════════════════
+const LFV_KEY='aaf_lettuce_field_vis';
+const LETTUCE_FIELD_DEFS=[
+  {key:'harvestDate', label:'🌾 Harvesting Date'},
+  {key:'supplyDate',  label:'🚚 Supply Date'},
+  {key:'location',    label:'📍 Farm Location'},
+  {key:'plot',         label:'🔢 Plot No.'},
+  {key:'trace',        label:'🔍 Traceability No.'},
+  {key:'variety',      label:'🥬 Variety'},
+  {key:'temp',         label:'🌡 Temp (°C)'},
+  {key:'district',     label:'📍 District / Country'},
+  {key:'harvestTime',  label:'⏰ Harvest Time'},
+  {key:'packType',     label:'📦 Packaging Type'},
+  {key:'headWt',       label:'🧺 Avg Head Wt'},
+  {key:'basketWt',     label:'⚖ Basket/Box Avg Wt'},
+  {key:'baskets',      label:'🧮 Total Baskets/Boxes'},
+  {key:'grossWt',      label:'📦 Gross Weight'},
+  {key:'basketTare',   label:'⚖ Tare / Basket'},
+  {key:'netWt',        label:'✅ Net Weight (Safi)'},
+  {key:'bestBefore',   label:'📅 Best Before'},
+  {key:'expiry',       label:'⚠ Expiry Date'},
+  {key:'fumigation',   label:'🌿 Fumigation'},
+  {key:'msds',         label:'🧪 MSDS'},
+  {key:'pesticide',    label:'💊 Pesticide'},
+  {key:'rate',         label:'💰 Rate/kg'},
+  {key:'customer',     label:'🏢 Customer'},
+  {key:'remarks',      label:'📝 Remarks'}
+];
+
+// Storage shape: { fieldKey: [ {month:'2026-07', visible:false}, {month:'2026-10', visible:true}, ... ] }
+function getLettuceFieldVis(){
+  try{ return JSON.parse(localStorage.getItem(LFV_KEY)||'{}'); }catch{ return {}; }
+}
+function setLettuceFieldVisAll(obj){
+  localStorage.setItem(LFV_KEY,JSON.stringify(obj));
+  if(typeof fbPush==='function') fbPush(LFV_KEY,obj);
+}
+function getLettuceFieldRules(key){
+  const all=getLettuceFieldVis();
+  const arr=Array.isArray(all[key])?all[key]:[];
+  return arr.slice().sort((a,b)=>a.month.localeCompare(b.month));
+}
+function setLettuceFieldRules(key,rules){
+  const all=getLettuceFieldVis();
+  all[key]=rules;
+  setLettuceFieldVisAll(all);
+}
+function currentMonthStr(){ return new Date().toISOString().slice(0,7); }
+function fmtMonthLabel(m){
+  if(!m||!/^\d{4}-\d{2}$/.test(m))return m||'';
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const [y,mm]=m.split('-');
+  return months[parseInt(mm,10)-1]+' '+y;
+}
+// Kisi field ka rule kisi specific month ke liye add/update karna (agar us month ka rule pehle se ho to overwrite)
+function scheduleLettuceField(key,month,visible){
+  if(!month){toast('⚠️ Pehle month select karein!');return;}
+  let rules=getLettuceFieldRules(key).filter(r=>r.month!==month);
+  rules.push({month,visible});
+  rules.sort((a,b)=>a.month.localeCompare(b.month));
+  setLettuceFieldRules(key,rules);
+  applyLettuceFieldVisibility();
+  syncInvoiceColVisFromLettuceFields();
+  renderLettuceFieldToggles();
+  try{ if(document.getElementById('panel-lettuce').style.display!=='none') renderLettuceTable(); }catch(e){}
+  const lbl=(LETTUCE_FIELD_DEFS.find(f=>f.key===key)||{}).label||key;
+  toast((visible?'🔔 ':'🔕 ')+lbl+' — '+fmtMonthLabel(month)+' se '+(visible?'ON':'OFF')+' ho gaya!');
+}
+function removeLettuceFieldRule(key,month){
+  if(!confirm('Yeh schedule entry delete karni hai?'))return;
+  const rules=getLettuceFieldRules(key).filter(r=>r.month!==month);
+  setLettuceFieldRules(key,rules);
+  applyLettuceFieldVisibility();
+  syncInvoiceColVisFromLettuceFields();
+  renderLettuceFieldToggles();
+  toast('🗑 Schedule entry hata di gayi.');
+}
+// Diye gaye month ke hisab se field ki visibility resolve karna:
+// jo bhi rule us month se pehle ya usi month ka ho, sab me se sab se latest wala lagu hoga.
+function resolveLettuceFieldVisibility(key,monthStr){
+  const rules=getLettuceFieldRules(key);
+  let result=true;
+  for(const r of rules){ if(r.month<=monthStr) result=r.visible; else break; }
+  return result;
+}
+function isLettuceFieldVisibleForDate(key,dateStr){
+  const m=(dateStr && /^\d{4}-\d{2}/.test(dateStr)) ? dateStr.slice(0,7) : currentMonthStr();
+  return resolveLettuceFieldVisibility(key,m);
+}
+// Invoice column visibility ko seedha Lettuce field-visibility schedule se nikalna —
+// taake Lettuce se jo field OFF ki jaye, wo invoices (auto ya manual) mein bhi khud-ba-khud
+// hide ho jaye, aur dubara ON karne par khud-ba-khud wapis aa jaye.
+function getLettuceColVisForMonth(monthStr){
+  return {
+    showGross:  resolveLettuceFieldVisibility('grossWt',    monthStr),
+    showTare:   resolveLettuceFieldVisibility('basketTare', monthStr),
+    showNet:    resolveLettuceFieldVisibility('netWt',      monthStr),
+    showAvgWt:  resolveLettuceFieldVisibility('basketWt',   monthStr),
+    showRemarks:resolveLettuceFieldVisibility('remarks',    monthStr)
+  };
+}
+// Entry form ke liye "context month" = jo Supply Date form me select hai, warna aaj ka month
+function getLettuceFormContextMonth(){
+  const el=document.getElementById('l-supply-date');
+  const v=el?el.value:'';
+  return (v && /^\d{4}-\d{2}/.test(v)) ? v.slice(0,7) : currentMonthStr();
+}
+function applyLettuceFieldVisibility(){
+  const monthCtx=getLettuceFormContextMonth();
+  document.querySelectorAll('[data-lfield]').forEach(el=>{
+    const key=el.getAttribute('data-lfield');
+    el.style.display=resolveLettuceFieldVisibility(key,monthCtx)?'':'none';
+  });
+}
+function renderLettuceFieldToggles(){
+  const wrap=document.getElementById('lettuce-field-toggles');
+  if(!wrap)return;
+  const nowM=currentMonthStr();
+  wrap.innerHTML=LETTUCE_FIELD_DEFS.map(f=>{
+    const rules=getLettuceFieldRules(f.key);
+    const statusOn=resolveLettuceFieldVisibility(f.key,nowM);
+    const chips=rules.map(r=>`<span style="display:inline-flex;align-items:center;gap:4px;background:${r.visible?'rgba(82,183,136,0.15)':'rgba(239,68,68,0.15)'};color:${r.visible?'#95d5b2':'#ff9b9b'};border-radius:99px;padding:2px 8px 2px 10px;font-size:10.5px;margin:2px 4px 2px 0;">
+        ${r.visible?'🔔 ON':'🔕 OFF'} ${fmtMonthLabel(r.month)}
+        <span onclick="removeLettuceFieldRule('${f.key}','${r.month}')" style="cursor:pointer;font-weight:700;padding-left:2px;">✕</span>
+      </span>`).join('');
+    return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:9px;padding:10px 12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+        <div style="font-size:12.5px;color:var(--text2);font-weight:600;">${f.label}</div>
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${statusOn?'rgba(82,183,136,0.2)':'rgba(239,68,68,0.2)'};color:${statusOn?'var(--mint)':'#ff9b9b'};">${statusOn?'ABHI ON':'ABHI OFF'}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <input type="month" id="lfv-month-${f.key}" value="${nowM}" style="background:rgba(10,22,16,0.6);border:1px solid rgba(82,183,136,0.2);border-radius:6px;padding:5px 7px;color:var(--text);font-size:11.5px;">
+        <button onclick="scheduleLettuceField('${f.key}',document.getElementById('lfv-month-${f.key}').value,false)" style="background:rgba(239,68,68,0.15);color:#ff9b9b;border:1px solid rgba(239,68,68,0.3);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;">🔕 Is Month Se OFF</button>
+        <button onclick="scheduleLettuceField('${f.key}',document.getElementById('lfv-month-${f.key}').value,true)" style="background:rgba(82,183,136,0.15);color:var(--mint);border:1px solid rgba(82,183,136,0.3);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;">🔔 Is Month Se ON</button>
+      </div>
+      ${chips?`<div style="margin-top:7px;">${chips}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function resetLettuceFieldVis(){
+  if(!confirm('Saari fields ke saare schedules delete kar ke wapis hamesha-ON kar dein?'))return;
+  setLettuceFieldVisAll({});
+  applyLettuceFieldVisibility();
+  renderLettuceFieldToggles();
+  syncInvoiceColVisFromLettuceFields();
+  toast('✅ Saari fields, sab months ke liye ON ho gayin!');
+}
+// Invoice ke column-checkboxes ko "is waqt" (current month) ki field visibility ke mutabiq default set karna
+function syncInvoiceColVisFromLettuceFields(){
+  const map={grossWt:'col-gross', basketTare:'col-tare', netWt:'col-net', remarks:'col-remarks', basketWt:'col-avgwt'};
+  const nowM=currentMonthStr();
+  Object.keys(map).forEach(fkey=>{
+    const cb=document.getElementById(map[fkey]);
+    if(cb) cb.checked=resolveLettuceFieldVisibility(fkey,nowM);
+  });
+}
+document.addEventListener('DOMContentLoaded', applyLettuceFieldVisibility);
 
 function _clearKey(k){
   localStorage.removeItem(k);
@@ -3139,6 +3448,7 @@ const TAB_TITLES = {
   qar: ['📋 QAR Reports','Quality Assurance Reports'],
   invoice: ['🧾 Supply Invoices','Generate and manage invoices'],
   label: ['🏷️ Label Print','TSC TTP-244 Pro supply labels'],
+  delivery: ['🚚 Delivery Note','3 copies per page — Farm / Customer / Office'],
   letterhead: ['📄 Letter Head','2 official letterheads — download ya print'],
   trash: ['🗑️ Trash / Recycle Bin','Deleted records — recover ya permanently delete'],
   basketReturn: ['🧺 Basket Return','Supplier ko wapis baskets ka hisab'],
@@ -3156,9 +3466,11 @@ function switchTab(tab, el){
   document.getElementById('topbar-title').textContent = t[0];
   document.getElementById('topbar-sub').textContent = t[1];
   if(tab==='qar') renderQarTable();
-  if(tab==='invoice') renderSavedInvoices();
+  if(tab==='invoice'){renderSavedInvoices();try{syncInvoiceColVisFromLettuceFields();}catch(e){}}
   if(tab==='basketReturn'){renderBasketReturnTable();brPopulateDropdown();}
   if(tab==='trash') renderTrash();
+  if(tab==='delivery') renderDeliveryTable();
+  if(tab==='lettuce') applyLettuceFieldVisibility();
   if(tab==='farms'){try{const d=dedupeFarms();const n=syncFarmsFromLettuce();const a=syncAcresFromFumigation();let msg=[];if(d>0)msg.push(d+' duplicate hata diye');if(n>0)msg.push(n+' naye add');if(a>0)msg.push(a+' acres update');if(msg.length)toast('🔄 '+msg.join(' | '));}catch(e){} renderFarmsTable();populatePlotDropdown();populateLocationDropdown();try{updateBadges();}catch(e){}}
   if(tab==='fumigation') populateLettuceFillDropdown();
   if(tab==='settings') renderSettingsPanel();
@@ -3251,7 +3563,7 @@ function autoSaveMonthlyInvoice(yearMonth){
     rate:DEFAULT_RATE,
     totalAmount,
     weightMode:'net',
-    colVis:{showGross:true,showTare:true,showNet:true,showRemarks:true},
+    colVis:getLettuceColVisForMonth(yearMonth),
     records:ratedRecords,
     savedAt:new Date().toISOString(),
     autoSaved:true
@@ -3341,7 +3653,8 @@ function autoSaveDailyInvoice(supplyDate){
   // Calculate totals
   const totalBaskets=dayRecords.reduce((s,r)=>s+(parseFloat(r.baskets)||0),0);
   const totalBoxes  =dayRecords.reduce((s,r)=>s+(r.packType==='box'?parseFloat(r.baskets)||0:0),0);
-  const totalBsktOnly=dayRecords.reduce((s,r)=>s+(!r.packType||r.packType==='basket'?parseFloat(r.baskets)||0:0),0);((s,r)=>s+(parseFloat(r.totalWt)||0),0);
+  const totalBsktOnly=dayRecords.reduce((s,r)=>s+(!r.packType||r.packType==='basket'?parseFloat(r.baskets)||0:0),0);
+  const totalWt=dayRecords.reduce((s,r)=>s+(parseFloat(r.totalWt)||0),0);
   const totalNetWt=dayRecords.reduce((s,r)=>s+(parseFloat(r.netWt)||0),0);
   const customers=[...new Set(dayRecords.map(r=>r.customer).filter(Boolean))].join(', ')||'—';
   // Apply default rate to each record
@@ -3364,7 +3677,7 @@ function autoSaveDailyInvoice(supplyDate){
     rate:DEFAULT_RATE,
     totalAmount,
     weightMode:'net',
-    colVis:{showGross:true,showTare:true,showNet:true,showRemarks:true},
+    colVis:getLettuceColVisForMonth(supplyDate.slice(0,7)),
     records:ratedRecords,
     savedAt:new Date().toISOString(),
     autoSaved:true
@@ -3429,6 +3742,8 @@ function saveLettuce(isEdit=false,editId=null){
     try{autoSaveDailyInvoice(rec.supplyDate);}catch(e){console.error('autoSaveDailyInvoice',e);}
     try{autoSaveMonthlyInvoice(rec.supplyDate.slice(0,7));}catch(e){console.error('autoSaveMonthlyInvoice',e);}
   }
+  // Weekly/Custom invoices jinme yeh record shamil hai unhe bhi latest data se sync karo
+  try{refreshInvoicesContainingLettuceRecord(rec.id);}catch(e){console.error('refreshInvoicesContainingLettuceRecord',e);}
   try{resequenceTraces();}catch(e){console.error('resequenceTraces',e);}
   try{resequenceInvoices();}catch(e){console.error('resequenceInvoices',e);}
   try{renderLettuceTable();}catch(e){console.error('renderLettuceTable',e);}
@@ -3439,6 +3754,45 @@ function saveLettuce(isEdit=false,editId=null){
   try{syncFarmsFromLettuce();}catch(e){}
   toast(isEdit?'✅ Record + Invoice update ho gaya!':'✅ Record aur Invoice save ho gaya!');
   autoCheckpoint();
+}
+
+// Kisi bhi saved invoice (weekly/custom — daily/monthly upar dedicated functions se
+// already refresh ho chuke hain) ko latest lettuce data se sync karo, agar us invoice
+// mein diya gaya record shamil hai. Sirf shamil records ke weight/data update hote hain,
+// invoice mein kaunse records shamil the wo selection nahi badalti.
+function refreshInvoicesContainingLettuceRecord(recId){
+  const invoices=load(KEYS.invoice);
+  if(!invoices.length)return;
+  const currentLettuce=load(KEYS.lettuce);
+  const curById={};currentLettuce.forEach(r=>curById[String(r.id)]=r);
+  let changed=false;
+  invoices.forEach(inv=>{
+    if(inv.type==='daily'||inv.type==='monthly')return; // in dono ka apna dedicated auto-refresh hai
+    if(!inv.records||!inv.records.length)return;
+    const hasRec=inv.records.some(r=>String(r.id)===String(recId));
+    if(!hasRec)return;
+    inv.records=inv.records.map(r=>{
+      const fresh=curById[String(r.id)];
+      if(!fresh)return r; // record delete ho chuka — purana data hi rehne do
+      return {...fresh,rate:r.rate};
+    });
+    const mode=inv.weightMode||'net';
+    inv.totalBaskets=inv.records.reduce((s,r)=>s+(parseFloat(r.baskets)||0),0);
+    inv.totalBoxes=inv.records.reduce((s,r)=>s+(r.packType==='box'?parseFloat(r.baskets)||0:0),0);
+    inv.totalBsktOnly=inv.records.reduce((s,r)=>s+(!r.packType||r.packType==='basket'?parseFloat(r.baskets)||0:0),0);
+    inv.totalWt=inv.records.reduce((s,r)=>s+(parseFloat(r.totalWt)||0),0);
+    inv.totalNetWt=inv.records.reduce((s,r)=>{const g=parseFloat(r.totalWt)||0,b=parseFloat(r.baskets)||0,t=parseFloat(r.basketTare)||1;return s+(parseFloat(r.netWt)||(g-b*t));},0);
+    inv.customers=[...new Set(inv.records.map(r=>r.customer).filter(Boolean))].join(', ')||'—';
+    inv.totalSupplies=inv.records.length;
+    inv.totalAmount=inv.records.reduce((s,r)=>{
+      const g=parseFloat(r.totalWt)||0,b=parseFloat(r.baskets)||0,t=parseFloat(r.basketTare)||1;
+      const n=parseFloat(r.netWt)||(g-b*t);
+      const uw=mode==='gross'?g:n;
+      return s+(uw*(parseFloat(r.rate)||0));
+    },0);
+    changed=true;
+  });
+  if(changed)save(KEYS.invoice,invoices);
 }
 
 function cancelLettuceEdit(){
@@ -3479,6 +3833,7 @@ function clearLettuceForm(){
   });
   document.getElementById('l-customer').value='Anchor Commodities Pvt Ltd';
   document.getElementById('l-rate').value='';
+  applyLettuceFieldVisibility();
 }
 
 function fmtDMY(dateStr){
@@ -3511,6 +3866,7 @@ function renderLettuceTable(){
       <td>${r.fumigation?`<span class="badge badge-${r.fumigation==='Yes'?'yes':'no'}">${r.fumigation}</span>`:'—'}</td>
       <td><div class="action-row">
         <button class="btn-sm btn-sm-view" onclick="viewLettuceRecord(${r.id})">👁 View</button>
+        <button class="btn-sm" style="background:rgba(212,168,67,0.12);color:var(--sand);border:1px solid rgba(212,168,67,0.3);" onclick="printLettuceRecordById(${r.id})">🖨 Print</button>
         <button class="btn-sm" style="background:rgba(46,156,212,0.12);color:#2e9cd4;border:1px solid rgba(46,156,212,0.3);" onclick="saveCombinedPDFById(${r.id})">🔗 PDF</button>
         <button class="btn-sm btn-sm-xls" onclick="downloadLettuceExcel(${r.id})">📊 XLS</button>
         <button class="btn-sm btn-sm-edit" onclick="editLettuceRecord(${r.id})">✏</button>
@@ -3523,22 +3879,23 @@ function viewLettuceRecord(id){
   const r=load(KEYS.lettuce).find(x=>x.id===id);if(!r)return;
   currentRecord=r; currentRecordType='lettuce';
   document.getElementById('modal-title').textContent='🥬 Lettuce Supply — '+(r.traceNo||r.supplyDate);
+  function rvf(key,lbl,val){ return isLettuceFieldVisibleForDate(key,r.supplyDate) ? rv(lbl,val) : ''; }
   document.getElementById('modal-body').innerHTML=`<div class="record-view">
     ${rv('Farm','Ahsin Agri Farm | Prop: Shoukat | 0300-9871404')}
-    ${rv('Date of Supply',r.supplyDate)}${rv('Traceability No.',r.traceNo)}
-    ${rv('Farm Location',r.location)}${rv('District / Country',r.district)}
-    ${rv('Lettuce Variety',r.variety)}${rv('Temp During Supply',r.temp?r.temp+'°C':'')}
-    ${rv('Harvesting Date',r.harvestDate)}${rv('Harvesting Time',r.harvestTime)}
-    ${rv('Avg Head Weight',r.headWt?r.headWt+' g':'')}
-    ${rv('Packaging Type',r.packType==='box'?'📦 Box':'🧺 Basket')}
-    ${rv(r.packType==='box'?'Box Wt (Gross)':'Basket Avg Weight',r.basketWt?r.basketWt+' kg':'')}
-    ${rv(r.packType==='box'?'Total Boxes':'Total Baskets',r.baskets)}${rv('Total Weight (Gross)',r.totalWt?r.totalWt+' kg':'')}
-    ${rv(r.packType==='box'?'Tare / Box':'Basket Tare Weight',r.basketTare?r.basketTare+' kg':(r.packType==='box'?'1 kg':'1 kg/tokri'))}
-    ${rv('Net Weight (Safi)',r.netWt?r.netWt+' kg':'—')}
-    ${rv('Best Before',r.bestBefore)}${rv('Fumigation',r.fumigation)}
-    ${rv('Pesticide Used',r.pesticide)}${rv('MSDS',r.msds)}
-    ${rv('Customer',r.customer)}${rv('Rate per kg',r.rate?'Rs. '+r.rate:'')}
-    ${rv('Date of Expiry',r.expiry)}${rv('Remarks',r.remarks)}
+    ${rvf('supplyDate','Date of Supply',r.supplyDate)}${rvf('trace','Traceability No.',r.traceNo)}
+    ${rvf('location','Farm Location',r.location)}${rvf('district','District / Country',r.district)}
+    ${rvf('variety','Lettuce Variety',r.variety)}${rvf('temp','Temp During Supply',r.temp?r.temp+'°C':'')}
+    ${rvf('harvestDate','Harvesting Date',r.harvestDate)}${rvf('harvestTime','Harvesting Time',r.harvestTime)}
+    ${rvf('headWt','Avg Head Weight',r.headWt?r.headWt+' g':'')}
+    ${rvf('packType','Packaging Type',r.packType==='box'?'📦 Box':'🧺 Basket')}
+    ${rvf('basketWt',r.packType==='box'?'Box Wt (Gross)':'Basket Avg Weight',r.basketWt?r.basketWt+' kg':'')}
+    ${rvf('baskets',r.packType==='box'?'Total Boxes':'Total Baskets',r.baskets)}${rvf('grossWt','Total Weight (Gross)',r.totalWt?r.totalWt+' kg':'')}
+    ${rvf('basketTare',r.packType==='box'?'Tare / Box':'Basket Tare Weight',r.basketTare?r.basketTare+' kg':(r.packType==='box'?'1 kg':'1 kg/tokri'))}
+    ${rvf('netWt','Net Weight (Safi)',r.netWt?r.netWt+' kg':'—')}
+    ${rvf('bestBefore','Best Before',r.bestBefore)}${rvf('fumigation','Fumigation',r.fumigation)}
+    ${rvf('pesticide','Pesticide Used',r.pesticide)}${rvf('msds','MSDS',r.msds)}
+    ${rvf('customer','Customer',r.customer)}${rvf('rate','Rate per kg',r.rate?'Rs. '+r.rate:'')}
+    ${rvf('expiry','Date of Expiry',r.expiry)}${rvf('remarks','Remarks',r.remarks)}
   </div>`;
   document.getElementById('view-modal').classList.add('open');
 }
@@ -3603,6 +3960,7 @@ function editLettuceRecord(id){
   btn.onclick=()=>{saveLettuce(true,r.id);btn.textContent='💾 Save Record';btn.onclick=()=>saveLettuce();document.getElementById('btn-cancel-lettuce').style.display='none';};
   const cancelBtn=document.getElementById('btn-cancel-lettuce');
   if(cancelBtn) cancelBtn.style.display='';
+  applyLettuceFieldVisibility();
   window.scrollTo({top:0,behavior:'smooth'});
   toast('📝 Edit mode. Changes kar ke Update karein.');
 }
@@ -3749,7 +4107,9 @@ function saveFumigation(isEdit=false,editId=null){
   };
   if(!rec.traceNo&&!rec.seedingDate){toast('⚠️ Trace Number ya Seeding Date zaroor bharein!');return;}
   if(rec.traceNo){
-    const dupIdx=records.findIndex(r=>r.traceNo===rec.traceNo && r.id!==rec.id);
+    const _baseOfTrace=t=>(t||'').trim().replace(/-(\d{3})$/,'');
+    const recBase=_baseOfTrace(rec.traceNo);
+    const dupIdx=records.findIndex(r=>r.id!==rec.id && (r.traceNo===rec.traceNo || (recBase && _baseOfTrace(r.traceNo)===recBase)));
     if(dupIdx!==-1){
       toast('❌ Yeh Traceability Number ('+rec.traceNo+') pehle se Fumigation mein exist karta hai! Duplicate save nahi ho sakta.');
       return;
@@ -3818,6 +4178,7 @@ function renderFumigationTable(){
       <td>${r.pesticides?r.pesticides.length:0}</td>
       <td><div class="action-row">
         <button class="btn-sm btn-sm-view" onclick="viewFumigationRecord(${r.id})">👁 View</button>
+        <button class="btn-sm" style="background:rgba(212,168,67,0.12);color:var(--sand);border:1px solid rgba(212,168,67,0.3);" onclick="printFumigationRecordById(${r.id})">🖨 Print</button>
         <button class="btn-sm btn-sm-xls" onclick="downloadFumigationExcel(${r.id})">📊 XLS</button>
         <button class="btn-sm btn-sm-edit" onclick="editFumigationRecord(${r.id})">✏</button>
         <button class="btn-sm btn-sm-del" onclick="deleteFumigationRecord(${r.id})">🗑</button>
@@ -3913,6 +4274,18 @@ function editFromModal(){
 // ══════════════════════════════════════
 // PRINT / PDF (same as original)
 // ══════════════════════════════════════
+function printLettuceRecordById(id){
+  const r=load(KEYS.lettuce).find(x=>x.id===id);if(!r)return;
+  currentRecord=r;currentRecordType='lettuce';
+  printRecord();
+}
+
+function printFumigationRecordById(id){
+  const r=load(KEYS.fumigation).find(x=>x.id===id);if(!r)return;
+  currentRecord=r;currentRecordType='fumigation';
+  printRecord();
+}
+
 function printRecord(){
   if(!currentRecord||!currentRecordType)return;
   const r=currentRecord;
@@ -4327,6 +4700,7 @@ function renderSettingsPanel(){
   updateAutoBackupStatusUI();
   renderCheckpointList();
   loadLettucDefaultsToSettings();
+  renderLettuceFieldToggles();
 }
 
 function saveLettucDefaults(){
@@ -5198,10 +5572,23 @@ function populateLettuceFillDropdown(){
   // Current edit mode mein jo fumigation record edit ho raha hai, uska traceNo exclude mat karo
   // Taake edit mode mein bhi linked lettuce record dropdown mein dikhe
   const currentFumTrace=(document.getElementById('f-trace')||{}).value||'';
-  const fumTraces=new Set(load(KEYS.fumigation).map(f=>(f.traceNo||'').trim()).filter(Boolean));
-  // Agar edit mode mein hain to current traceNo filter se hata do
-  if(currentFumTrace.trim()) fumTraces.delete(currentFumTrace.trim());
-  _lettuceAllRecords=allL.filter(r=>!r.traceNo||!fumTraces.has(r.traceNo.trim()));
+  const _baseOfTrace=t=>(t||'').trim().replace(/-(\d{3})$/,'');
+  const fumRecords=load(KEYS.fumigation);
+  const fumTraces=new Set(fumRecords.map(f=>(f.traceNo||'').trim()).filter(Boolean));
+  // Base (prefix without the -NNN suffix) bhi match karo — kyunke lettuce edit/save par
+  // resequenceTraces() suffix number badal sakta hai, lekin base (plot+date) wahi rehta hai.
+  // Isi base se pehchano ke fumigation already ho chuki hai, chahe suffix shift ho gaya ho.
+  const fumBases=new Set(fumRecords.map(f=>_baseOfTrace(f.traceNo)).filter(Boolean));
+  // Agar edit mode mein hain to current traceNo/base filter se hata do
+  if(currentFumTrace.trim()){
+    fumTraces.delete(currentFumTrace.trim());
+    fumBases.delete(_baseOfTrace(currentFumTrace));
+  }
+  _lettuceAllRecords=allL.filter(r=>{
+    if(!r.traceNo)return true;
+    const t=r.traceNo.trim();
+    return !fumTraces.has(t) && !fumBases.has(_baseOfTrace(t));
+  });
   renderLettuceDDItems('');
 }
 function filterLettuceDD(q){renderLettuceDDItems(q.toLowerCase().trim());}
@@ -5704,6 +6091,11 @@ function generateInvoice(){
   const customers=[...new Set(records.map(r=>r.customer).filter(Boolean))].join(', ')||'—';
   const rate=parseFloat(document.getElementById('inv-rate').value)||240;
   const autoInvNo=getAutoInvNo(range);
+  // Column checkboxes ko is period ke Lettuce field-visibility settings se sync karo
+  // (user chahe to preview banne se pehle inhe manually bhi badal sakta hai)
+  const _periodCols=getLettuceColVisForMonth((range.from||'').slice(0,7));
+  const _cbMap={showGross:'col-gross',showAvgWt:'col-avgwt',showTare:'col-tare',showNet:'col-net',showRemarks:'col-remarks'};
+  Object.keys(_cbMap).forEach(k=>{const cb=document.getElementById(_cbMap[k]);if(cb)cb.checked=_periodCols[k];});
   currentInvoiceData={range,records,totalBaskets,totalBoxes,totalBsktOnly,totalWt,totalNetWt,customers,rate,totalAmount:0,invNo:autoInvNo};
   buildRatePanel(records,rate);
   document.getElementById('inv-rate-panel').style.display='block';
@@ -5762,7 +6154,7 @@ function recalcPanelTotal(){
   if(totalEl)totalEl.textContent=total>0?'Rs. '+Math.round(total).toLocaleString('en-PK'):'—';
 }
 function applyBulkRate(val){const rate=parseFloat(val)||0;document.querySelectorAll('.date-rate-input').forEach(inp=>{inp.value=rate>0?rate:'';});recalcPanelTotal();}
-function getColVisibility(){return{showGross:document.getElementById('col-gross')?document.getElementById('col-gross').checked:true,showTare:document.getElementById('col-tare')?document.getElementById('col-tare').checked:true,showNet:document.getElementById('col-net')?document.getElementById('col-net').checked:true,showRemarks:document.getElementById('col-remarks')?document.getElementById('col-remarks').checked:true};}
+function getColVisibility(){return{showGross:document.getElementById('col-gross')?document.getElementById('col-gross').checked:false,showAvgWt:document.getElementById('col-avgwt')?document.getElementById('col-avgwt').checked:true,showTare:document.getElementById('col-tare')?document.getElementById('col-tare').checked:false,showNet:document.getElementById('col-net')?document.getElementById('col-net').checked:true,showRemarks:document.getElementById('col-remarks')?document.getElementById('col-remarks').checked:true};}
 
 function applyRatesAndRefresh(){
   if(!currentInvoiceData)return;
@@ -5786,7 +6178,7 @@ function buildInvoiceHTML(data, forPrint=false){
   const dateStr    = now.toLocaleDateString('en-GB');
   const timeStr    = now.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
   const weightMode = data.weightMode||'net';
-  const cols       = data.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true};
+  const cols       = Object.assign({showGross:false,showTare:false,showNet:true,showRemarks:true,showAvgWt:true},data.colVis||{});
   // Packaging type detection
   const hasBox          = records.some(r=>r.packType==='box');
   const hasBasket       = records.some(r=>!r.packType||r.packType==='basket');
@@ -5881,6 +6273,8 @@ function buildInvoiceHTML(data, forPrint=false){
     const traceDisplay = forPrint ? (r.traceNo||'—').replace(/\//g,'/<wbr>') : (r.traceNo||'—');
 
     const grossCell  = cols.showGross  ? `<td style="padding:${p};border:${rowBdr};text-align:center;color:${forPrint?'#000':'#666'};font-size:${fs};background:${rowBg};white-space:nowrap;">${g?g.toFixed(1):'—'}</td>` : '';
+    const avgWt = parseFloat(r.basketWt)||0;
+    const avgWtCell  = cols.showAvgWt  ? `<td style="padding:${p};border:${rowBdr};text-align:center;color:${forPrint?'#000':'#555'};font-size:${fsM};background:${rowBg};white-space:nowrap;">${avgWt>0?avgWt+' kg':'—'}</td>` : '';
     const tareCell   = cols.showTare   ? `<td style="padding:${p};border:${rowBdr};text-align:center;color:${forPrint?'#000':'#aaa'};font-size:${fsM};background:${rowBg};white-space:nowrap;">${t?t+'×'+b:'—'}</td>` : '';
     const netCell    = cols.showNet    ? `<td style="padding:${p};border:${rowBdr};text-align:center;font-weight:800;color:${forPrint?'#000':'#166534'};font-size:${fs};background:${forPrint?'#efefef':'#f0fdf4'};white-space:nowrap;">${nwt>0?nwt.toFixed(1):'—'}</td>` : '';
     const remCell    = cols.showRemarks? `<td style="padding:${p};border:${rowBdr};font-size:${fsM};color:${forPrint?'#000':'#888'};background:${rowBg};word-break:break-word;max-width:80px;">${r.remarks||''}</td>` : '';
@@ -5903,7 +6297,7 @@ function buildInvoiceHTML(data, forPrint=false){
       <td style="padding:${p};border:${rowBdr};color:${forPrint?'#000':'#166534'};font-weight:700;font-family:monospace;font-size:${fsM};background:${rowBg};white-space:nowrap;">${traceDisplay}</td>
       <td style="padding:${p};border:${rowBdr};color:${forPrint?'#000':'#333'};font-size:${fs};background:${rowBg};white-space:nowrap;">${r.variety||'—'}</td>
       <td style="padding:${p};border:${rowBdr};text-align:center;font-weight:700;color:${forPrint?'#000':'#333'};font-size:${fs};background:${rowBg};white-space:nowrap;">${r.baskets?(r.packType==='box'?r.baskets+' Boxes':r.baskets+' Bskts'):'—'}</td>
-      ${grossCell}${tareCell}${netCell}${rateCell}${amtCell}${remCell}
+      ${grossCell}${avgWtCell}${tareCell}${netCell}${rateCell}${amtCell}${remCell}
     </tr>`;
   }
 
@@ -5911,6 +6305,10 @@ function buildInvoiceHTML(data, forPrint=false){
   rows=records.map((r,i)=>buildRow(r,i,rowRates)).join('');
 
   // ── PRINT CSS ──
+  // ── SUMMARY STRIP COLUMN COUNT (adjusts when Gross Wt is hidden) ──
+  const statColCount = cols.showGross ? 5 : 4;
+  const statW = (100/statColCount).toFixed(2)+'%';
+
   const printCSS = forPrint ? `<style>
     @page{size:A4 portrait;margin:6mm 8mm;}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box;}
@@ -5937,7 +6335,8 @@ function buildInvoiceHTML(data, forPrint=false){
             <th style="${thBase(`color:${forPrint?'#000':'#fff'};text-align:left;`)}">VARIETY</th>
             <th style="${thBase(`color:${forPrint?'#000':'#fff'};`)}">PKG<br>QTY</th>
             ${cols.showGross?`<th style="${thBase(`color:${forPrint?'#000':'#ccc'};`)}">GROSS<br>KG</th>`:''}
-            ${cols.showTare?`<th style="${thBase(`color:${forPrint?'#000':'#ccc'};`)}">TARE</th>`:''}
+            ${cols.showAvgWt?`<th style="${thBase(`color:${forPrint?'#000':'#ccc'};`)}">AVG WT<br>/BSKT</th>`:''}
+            ${cols.showTare?`<th style="${thBase(`color:${forPrint?'#000':'#ccc'};`)}">TARE<br><span style="font-size:8px;font-weight:400;">×QTY</span></th>`:''}
             ${cols.showNet?`<th style="${thBase(`color:${forPrint?'#000':'#90ef9a'};${forPrint?'':'background:rgba(82,183,136,0.15);'}`)}">NET<br>KG</th>`:''}
             <th style="${thBase(`color:${forPrint?'#000':'#fde68a'};${forPrint?'':'background:rgba(212,168,67,0.15);'}`)}">RATE<br>Rs/kg</th>
             <th style="${thBase(`color:${forPrint?'#000':'#fde68a'};${forPrint?'':'background:rgba(212,168,67,0.15);'}text-align:right;border-right:none;`)}">AMOUNT<br>Rs.</th>
@@ -5950,6 +6349,7 @@ function buildInvoiceHTML(data, forPrint=false){
             <td colspan="4" style="padding:8px;font-weight:800;color:#fff;text-align:right;font-size:11px;">GRAND TOTAL</td>
             <td style="padding:8px 6px;font-weight:800;color:#fff;text-align:center;">${isMixed?`<div style="line-height:1.4;">${totalBsktCount}<span style="font-size:8px;font-weight:400;color:#aaa;"> Bskts</span><br>${totalBoxCount}<span style="font-size:8px;font-weight:400;color:#aaa;"> Boxes</span></div>`:totalBaskets}</td>
             ${cols.showGross?`<td style="padding:8px 6px;color:#ddd;text-align:center;font-size:10px;">${parseFloat(totalWt).toFixed(1)}</td>`:''}
+            ${cols.showAvgWt?`<td style="padding:8px 6px;color:#888;text-align:center;">—</td>`:''}
             ${cols.showTare?`<td style="padding:8px 6px;color:#888;text-align:center;">—</td>`:''}
             ${cols.showNet?`<td style="padding:8px 6px;font-weight:800;color:#fff;text-align:center;">${netWtDisplay}</td>`:''}
             <td style="padding:8px 6px;color:#888;text-align:center;">—</td>
@@ -6013,23 +6413,23 @@ function buildInvoiceHTML(data, forPrint=false){
   <!-- SUMMARY STRIP -->
   <table style="width:100%;margin-bottom:10px;border:1px solid #1a3a2a;border-collapse:collapse;">
     <tr>
-      <td style="width:20%;padding:8px;text-align:center;border-right:1px solid #ccc;">
+      <td style="width:${statW};padding:8px;text-align:center;border-right:1px solid #ccc;">
         <div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Supplies</div>
         <div style="font-size:20px;font-weight:900;color:#1a3a2a;">${records.length}</div>
       </td>
-      <td style="width:20%;padding:8px;text-align:center;border-right:1px solid #ccc;">
+      <td style="width:${statW};padding:8px;text-align:center;border-right:1px solid #ccc;">
         <div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">${isMixed?'Baskets / Boxes':packLabel}</div>
         ${packCountDisplay}
       </td>
-      <td style="width:20%;padding:8px;text-align:center;border-right:1px solid #ccc;">
+      ${cols.showGross?`<td style="width:${statW};padding:8px;text-align:center;border-right:1px solid #ccc;">
         <div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Gross Wt</div>
         <div style="font-size:16px;font-weight:700;color:#888;">${parseFloat(totalWt).toFixed(1)}<span style="font-size:9px;"> kg</span></div>
-      </td>
-      <td style="width:20%;padding:8px;text-align:center;border-right:1px solid #ccc;background:#1a3a2a;">
+      </td>`:''}
+      <td style="width:${statW};padding:8px;text-align:center;border-right:1px solid #ccc;background:#1a3a2a;">
         <div style="font-size:8px;font-weight:700;color:#74c69d;text-transform:uppercase;">Net Wt (Safi)</div>
         <div style="font-size:16px;font-weight:700;color:#95d5b2;">${netWtDisplay}<span style="font-size:9px;"> kg</span></div>
       </td>
-      <td style="width:20%;padding:8px;text-align:center;background:#d4a843;">
+      <td style="width:${statW};padding:8px;text-align:center;background:#d4a843;">
         <div style="font-size:8px;font-weight:700;color:#7a5a00;text-transform:uppercase;">Total Amount</div>
         <div style="font-size:14px;font-weight:900;color:#1a3a2a;">${hasAmount?'Rs.'+Math.round(totalAmount).toLocaleString('en-PK'):'—'}</div>
       </td>
@@ -6139,10 +6539,10 @@ ${recalcScript}`;
       </div>
     </div>
     <div style="padding:0 22px 12px;">
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:2px solid #1a3a2a;border-radius:8px;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:repeat(${statColCount},1fr);gap:0;border:2px solid #1a3a2a;border-radius:8px;overflow:hidden;">
         <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Supplies</div><div style="font-size:22px;font-weight:900;color:#1a3a2a;">${records.length}</div></div>
         <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">${isMixed?'Baskets / Boxes':packLabel}</div>${packCountDisplay}</div>
-        <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Gross Wt</div><div style="font-size:16px;font-weight:800;color:#888;">${parseFloat(totalWt).toFixed(1)}<span style="font-size:9px;"> kg</span></div></div>
+        ${cols.showGross?`<div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;"><div style="font-size:8px;font-weight:700;color:#6b8f71;text-transform:uppercase;">Gross Wt</div><div style="font-size:16px;font-weight:800;color:#888;">${parseFloat(totalWt).toFixed(1)}<span style="font-size:9px;"> kg</span></div></div>`:''}
         <div style="padding:10px 8px;text-align:center;border-right:1px solid #c3e6cb;background:#1a3a2a;"><div style="font-size:8px;font-weight:700;color:#74c69d;text-transform:uppercase;">Net Wt (Safi)</div><div style="font-size:16px;font-weight:800;color:#95d5b2;">${netWtDisplay}<span style="font-size:9px;"> kg</span></div></div>
         <div style="padding:10px 8px;text-align:center;background:linear-gradient(135deg,#d4a843,#c9a030);"><div style="font-size:8px;font-weight:700;color:#7a5a00;text-transform:uppercase;">Total Amount</div><div id="inv-grand-total" style="font-size:13px;font-weight:900;color:#1a3a2a;">${hasAmount?'Rs. '+Math.round(totalAmount).toLocaleString('en-PK'):'Pending'}</div></div>
       </div>
@@ -7005,7 +7405,7 @@ function saveInvoice(){
   const _from=currentInvoiceData.range.from, _to=currentInvoiceData.range.to;
   // Duplicate check — same type + same period pehle se hai?
   const dupIdx=invoices.findIndex(x=>x.type===type && x.from===_from && x.to===_to);
-  const inv={id:dupIdx>=0?invoices[dupIdx].id:Date.now(),invNo:dupIdx>=0?(invoices[dupIdx].invNo||invNo):invNo,type:currentInvoiceData.range.type,label:currentInvoiceData.range.label,from:currentInvoiceData.range.from,to:currentInvoiceData.range.to,customers:currentInvoiceData.customers,totalSupplies:currentInvoiceData.records.length,totalBaskets:currentInvoiceData.totalBaskets,totalBoxes:currentInvoiceData.totalBoxes||0,totalBsktOnly:currentInvoiceData.totalBsktOnly||0,totalWt:currentInvoiceData.totalWt,totalNetWt:currentInvoiceData.totalNetWt||0,rate:currentInvoiceData.rate||0,totalAmount:parseFloat(document.getElementById('inv-amount').value)||currentInvoiceData.totalAmount||0,weightMode:currentInvoiceData.weightMode||'net',colVis:currentInvoiceData.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true},records:currentInvoiceData.records,savedAt:new Date().toISOString()};
+  const inv={id:dupIdx>=0?invoices[dupIdx].id:Date.now(),invNo:dupIdx>=0?(invoices[dupIdx].invNo||invNo):invNo,type:currentInvoiceData.range.type,label:currentInvoiceData.range.label,from:currentInvoiceData.range.from,to:currentInvoiceData.range.to,customers:currentInvoiceData.customers,totalSupplies:currentInvoiceData.records.length,totalBaskets:currentInvoiceData.totalBaskets,totalBoxes:currentInvoiceData.totalBoxes||0,totalBsktOnly:currentInvoiceData.totalBsktOnly||0,totalWt:currentInvoiceData.totalWt,totalNetWt:currentInvoiceData.totalNetWt||0,rate:currentInvoiceData.rate||0,totalAmount:parseFloat(document.getElementById('inv-amount').value)||currentInvoiceData.totalAmount||0,weightMode:currentInvoiceData.weightMode||'net',colVis:currentInvoiceData.colVis||{showGross:false,showAvgWt:true,showTare:false,showNet:true,showRemarks:true},records:currentInvoiceData.records,savedAt:new Date().toISOString()};
   if(dupIdx>=0){
     invoices[dupIdx]=inv;save(KEYS.invoice,invoices);
     currentInvoiceData.invNo=inv.invNo;
@@ -7087,12 +7487,12 @@ function updateInvoiceRate(id,rateVal){
 }
 function viewSavedInvoice(id){
   const inv=load(KEYS.invoice).find(x=>String(x.id)===String(id));if(!inv)return;
-  const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true}};
+  const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:false,showAvgWt:true,showTare:false,showNet:true,showRemarks:true}};
   currentInvoiceData=data;document.getElementById('inv-preview').innerHTML=buildInvoiceHTML(data,false);
   document.getElementById('inv-preview-card').style.display='block';document.getElementById('inv-preview-card').scrollIntoView({behavior:'smooth'});
 }
-function printSavedInvoice(id){const inv=load(KEYS.invoice).find(x=>String(x.id)===String(id));if(!inv)return;const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true}};openInvoicePrintWindow(data,false);}
-function downloadInvoicePDF(id){const inv=load(KEYS.invoice).find(x=>String(x.id)===String(id));if(!inv)return;const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true}};openInvoicePrintWindow(data,true);}
+function printSavedInvoice(id){const inv=load(KEYS.invoice).find(x=>String(x.id)===String(id));if(!inv)return;const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:false,showAvgWt:true,showTare:false,showNet:true,showRemarks:true}};openInvoicePrintWindow(data,false);}
+function downloadInvoicePDF(id){const inv=load(KEYS.invoice).find(x=>String(x.id)===String(id));if(!inv)return;const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:false,showAvgWt:true,showTare:false,showNet:true,showRemarks:true}};openInvoicePrintWindow(data,true);}
 
 function _openBulkPrintWindow(invoices){
   if(!invoices||!invoices.length){toast('⚠️ Koi invoice nahi!');return;}
@@ -7101,7 +7501,7 @@ function _openBulkPrintWindow(invoices){
   if(!win){toast('⚠️ Popup blocked! Browser allow karein.');return;}
   // Build all invoice HTMLs separated by page breaks
   const parts=invoices.map(inv=>{
-    const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:true,showTare:true,showNet:true,showRemarks:true}};
+    const data={range:{label:inv.label,type:inv.type,from:inv.from,to:inv.to},records:inv.records,totalBaskets:inv.totalBaskets,totalWt:inv.totalWt,totalNetWt:inv.totalNetWt||0,customers:inv.customers,invNo:inv.invNo,rate:inv.rate||0,totalAmount:inv.totalAmount||0,weightMode:inv.weightMode||'net',colVis:inv.colVis||{showGross:false,showAvgWt:true,showTare:false,showNet:true,showRemarks:true}};
     const _qrText=JSON.stringify({invNo:String(inv.invNo||''),customer:String(inv.customers||''),amount:Math.round(parseFloat(inv.totalAmount||0)||0),verify:true});
     const _qrDataURL=_genQRDataURL(_qrText,70);
     let html=buildInvoiceHTML(data,true);
@@ -7444,7 +7844,9 @@ function onNetManual(){
   const pt=(document.getElementById('l-pack-type')||{}).value||'basket';
   if(pt!=='box')return;
   const boxes=parseFloat(document.getElementById('l-baskets').value)||0;
-  const tare=parseFloat(document.getElementById('l-basket-tare').value)||0;
+  const monthCtx=getLettuceFormContextMonth();
+  const tareOn=resolveLettuceFieldVisibility('basketTare',monthCtx);
+  const tare=tareOn?(parseFloat(document.getElementById('l-basket-tare').value)||0):0;
   const net=parseFloat(document.getElementById('l-net-wt').value)||0;
   const gross=net+boxes*tare;
   document.getElementById('l-total-wt').value=gross.toFixed(1);
@@ -7455,13 +7857,15 @@ function calcTotalWeight(){
   const pt=(document.getElementById('l-pack-type')||{}).value||'basket';
   const totalEl=document.getElementById('l-total-wt');
   const netEl=document.getElementById('l-net-wt');
+  const monthCtx=getLettuceFormContextMonth();
+  const tareOn=resolveLettuceFieldVisibility('basketTare',monthCtx);
   if(pt==='box'){
     const boxes=parseFloat(document.getElementById('l-baskets').value)||0;
     const grossPerBox=parseFloat(document.getElementById('l-basket-wt').value)||0;
-    const tare=parseFloat(document.getElementById('l-basket-tare').value)||0;
+    const tare=tareOn?(parseFloat(document.getElementById('l-basket-tare').value)||0):0;
     if(boxes>0&&grossPerBox>0){
       const gross=boxes*grossPerBox;          // 101 × 24 = 2424
-      const net=gross-(boxes*tare);           // 2424 − (101×1) = 2323
+      const net=gross-(boxes*tare);           // 2424 − (101×1) = 2323 — tare OFF ho to net=gross
       totalEl.value=gross.toFixed(1);
       netEl.value=net>0?net.toFixed(1):'0.0';
     }else{netEl.value='';totalEl.value='';}
@@ -7471,7 +7875,7 @@ function calcTotalWeight(){
   if(baskets>0&&basketWt>0)totalEl.value=(baskets*basketWt).toFixed(1);else totalEl.value='';
   calcNetWeight();
 }
-function calcNetWeight(){const pt=(document.getElementById('l-pack-type')||{}).value||'basket';if(pt==='box'){return;}const baskets=parseFloat(document.getElementById('l-baskets').value)||0,grossWt=parseFloat(document.getElementById('l-total-wt').value)||0,tare=parseFloat(document.getElementById('l-basket-tare').value)||0;const netEl=document.getElementById('l-net-wt');if(grossWt>0&&tare>=0){const net=grossWt-(baskets*tare);netEl.value=net>0?net.toFixed(1):'0.0';}else netEl.value='';}
+function calcNetWeight(){const pt=(document.getElementById('l-pack-type')||{}).value||'basket';if(pt==='box'){return;}const baskets=parseFloat(document.getElementById('l-baskets').value)||0,grossWt=parseFloat(document.getElementById('l-total-wt').value)||0;const monthCtx=getLettuceFormContextMonth();const tareOn=resolveLettuceFieldVisibility('basketTare',monthCtx);const tare=tareOn?(parseFloat(document.getElementById('l-basket-tare').value)||0):0;const netEl=document.getElementById('l-net-wt');if(grossWt>0&&tare>=0){const net=grossWt-(baskets*tare);netEl.value=net>0?net.toFixed(1):'0.0';}else netEl.value='';}
 
 // ══════════════════════════════════════
 // LABEL
@@ -7603,6 +8007,375 @@ function clearLabelForm(){
 document.addEventListener('click',function(e){
   const panel=document.getElementById('lbl-lettuce-panel');
   const sel=document.getElementById('lbl-lettuce-selected');
+  if(panel&&sel&&!sel.contains(e.target)&&!panel.contains(e.target))panel.style.display='none';
+});
+
+// ══════════════════════════════════════
+// TOPBAR DATA MENU (Backup / Restore / Merge / Logout / Clear)
+// ══════════════════════════════════════
+function toggleDataMenu(e){
+  if(e)e.stopPropagation();
+  document.getElementById('topbar-data-panel').classList.toggle('show');
+}
+function closeDataMenu(){
+  document.getElementById('topbar-data-panel').classList.remove('show');
+}
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('topbar-data-wrap');
+  if(wrap&&!wrap.contains(e.target))closeDataMenu();
+});
+
+// ══════════════════════════════════════
+// DELIVERY NOTE (3 copies per A4 page)
+// ══════════════════════════════════════
+function openDNLettuceDD(){const panel=document.getElementById('dn-lettuce-panel');panel.style.display=panel.style.display==='none'?'block':'none';if(panel.style.display==='block'){filterDNLettuceDD('');document.getElementById('dn-lettuce-search').focus();}}
+function filterDNLettuceDD(q){
+  const list=document.getElementById('dn-lettuce-list');const records=load(KEYS.lettuce).slice().sort((a,b)=>{var d=(b.supplyDate||'').localeCompare(a.supplyDate||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});
+  const filtered=q?records.filter(r=>(r.traceNo||'').toLowerCase().includes(q.toLowerCase())||(r.supplyDate||'').includes(q)||(r.variety||'').toLowerCase().includes(q.toLowerCase())):records;
+  if(!filtered.length){list.innerHTML='<div style="padding:12px 14px;font-size:11px;color:var(--text-dim);">😕 Not found</div>';return;}
+  list.innerHTML=filtered.slice(0,30).map(r=>`
+    <div onclick="selectDNLettuce(${r.id})"
+      style="padding:10px 14px;font-size:11.5px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border2);"
+      onmouseover="this.style.background='rgba(82,183,136,0.08)'" onmouseout="this.style.background=''">
+      <strong style="color:var(--mint);">${r.traceNo||'—'}</strong>
+      <span style="color:var(--text2);margin-left:8px;">${r.supplyDate||''}</span>
+      <span style="color:var(--sage3);margin-left:6px;">${r.variety||''}</span>
+    </div>`).join('');
+}
+function selectDNLettuce(id){
+  document.getElementById('dn-lettuce-id').value=id;
+  const r=load(KEYS.lettuce).find(x=>x.id===id);
+  if(r){
+    const label=(r.traceNo||'—')+' — '+(r.supplyDate||'');
+    document.getElementById('dn-lettuce-selected').childNodes[0].nodeValue=label;
+  }
+  document.getElementById('dn-lettuce-panel').style.display='none';
+}
+function dnLastNumFromTrace(traceNo){
+  if(!traceNo)return '';
+  const m=traceNo.match(/(\d+)\s*$/);
+  return m?m[1]:'';
+}
+function autoFillDNTrace(){
+  const id=parseInt(document.getElementById('dn-lettuce-id').value);
+  if(!id){toast('⚠️ Pehle koi lettuce record select karein!');return;}
+  const r=load(KEYS.lettuce).find(x=>x.id===id);
+  if(!r){toast('⚠️ Record nahi mila!');return;}
+  if(r.traceNo)document.getElementById('dn-trace').value=r.traceNo;
+  if(r.supplyDate)document.getElementById('dn-date').value=r.supplyDate;
+  const lastNum=dnLastNumFromTrace(r.traceNo);
+  if(lastNum)document.getElementById('dn-no').value=lastNum;
+  toast('✅ Trace No, Date aur No. fill ho gaye!');
+}
+
+function gatherDeliveryFormData(){
+  return {
+    no: document.getElementById('dn-no').value||'',
+    date: document.getElementById('dn-date').value||'',
+    customer: document.getElementById('dn-customer').value||'',
+    city: document.getElementById('dn-city').value||'',
+    branch: document.getElementById('dn-branch').value||'',
+    temp: document.getElementById('dn-temp').value||'',
+    boxes: document.getElementById('dn-boxes').value||'',
+    kgs: document.getElementById('dn-kgs').value||'',
+    trace: document.getElementById('dn-trace').value||''
+  };
+}
+
+function buildDeliveryNoteCopy(data,copyLabel,barcodeId){
+  const no=data.no||'—';
+  const date=fmtDateLabel(data.date);
+  const customer=data.customer||'—';
+  const city=data.city||'';
+  const branch=data.branch||'';
+  const temp=data.temp||'';
+  const boxes=data.boxes||'';
+  const kgs=data.kgs||'';
+  const trace=data.trace||'—';
+  const barcodeVal=(trace!=='—'&&trace)?trace:(no!=='—'&&no?('DN-'+no):'AAF-000');
+  function line(w){return `border-bottom:1px solid #000;display:inline-block;min-width:${w};height:14px;`;}
+  return `
+  <div class="dn-copy">
+    <div class="dn-copytag">${copyLabel}</div>
+    <div class="dn-barcode-wrap"><svg class="dn-barcode" id="${barcodeId}" data-value="${barcodeVal}"></svg></div>
+    <div class="dn-header">
+      <div class="dn-company">Ahsin Agri Farm</div>
+      <div class="dn-addr">Khanpur Mera Shinkiari, District Mansehra, KPK, Pakistan</div>
+      <div class="dn-addr">Prop: Shoukat Ali &nbsp;|&nbsp; Cell: 0300-9871404</div>
+    </div>
+    <div class="dn-title">Delivery Note</div>
+    <div class="dn-row">
+      <span>Date: <span style="${line('90px')}">${date!=='—'?date:''}</span></span>
+      <span>No: <span style="${line('90px')}">${no!=='—'?no:''}</span></span>
+    </div>
+    <div class="dn-row"><span>Customer's Name: <span style="${line('320px')}">${customer!=='—'?customer:''}</span></span></div>
+    <div class="dn-row">
+      <span>City: <span style="${line('150px')}">${city}</span></span>
+      <span>Branch: <span style="${line('150px')}">${branch}</span></span>
+    </div>
+    <div class="dn-note">I have received the following item in good condition.</div>
+    <table class="dn-table">
+      <tr><th>Item</th><th>Temp. °C</th><th>Box/Boxes</th><th>Kgs.</th></tr>
+      <tr><td>Lettuce (Iceberg)</td><td>${temp}</td><td>${boxes}</td><td>${kgs}</td></tr>
+    </table>
+    <div class="dn-row"><span>Traceability No: <b>${trace}</b></span></div>
+    <div class="dn-row" style="margin-top:10px;">
+      <span>Receiver's Name: <span style="${line('280px')}"></span></span>
+    </div>
+    <div class="dn-row">
+      <span>Receiver's Sign: <span style="${line('180px')}"></span></span>
+      <span>Date: <span style="${line('110px')}"></span></span>
+    </div>
+  </div>`;
+}
+
+function buildDeliveryNoteFullPage(data){
+  const d=data||gatherDeliveryFormData();
+  const copies=[
+    buildDeliveryNoteCopy(d,'Copy 1 of 3 — For Customer Copy','dn-bc-1'),
+    buildDeliveryNoteCopy(d,'Copy 2 of 3 — For Official Record','dn-bc-2'),
+    buildDeliveryNoteCopy(d,'Copy 3 of 3 — Ahsin Agri Farm Copy','dn-bc-3')
+  ];
+  return copies.join('<div class="dn-cutline">✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</div>');
+}
+
+// Render actual barcodes into the .dn-barcode SVG placeholders (call after HTML is inserted in the DOM)
+function renderDNBarcodes(root){
+  const scope=root||document;
+  if(typeof JsBarcode==='undefined')return;
+  scope.querySelectorAll('.dn-barcode').forEach(el=>{
+    const val=el.getAttribute('data-value')||'AAF-000';
+    try{
+      JsBarcode(el,val,{format:'CODE128',displayValue:true,fontSize:9,height:32,width:1.4,margin:0,background:'#ffffff',lineColor:'#000000'});
+    }catch(e){console.warn('barcode error:',e);}
+  });
+}
+
+const DN_STYLE = `
+  *{box-sizing:border-box;}
+  .dn-copy{width:100%;padding:8px 20px;font-family:Arial,Helvetica,sans-serif;color:#000;position:relative;}
+  .dn-copytag{position:absolute;top:4px;right:20px;font-size:8.5px;color:#555;font-style:italic;}
+  .dn-barcode-wrap{position:absolute;top:16px;right:20px;text-align:right;}
+  .dn-barcode-wrap svg{max-width:130px;height:auto;}
+  .dn-header{text-align:center;margin-bottom:2px;}
+  .dn-company{font-size:18px;font-weight:800;font-family:Georgia,'Times New Roman',serif;letter-spacing:0.3px;}
+  .dn-addr{font-size:9px;color:#333;}
+  .dn-title{text-align:center;font-size:13px;font-weight:700;text-decoration:underline;margin:6px 0 8px;}
+  .dn-row{display:flex;gap:26px;font-size:11px;margin:5px 0;flex-wrap:wrap;}
+  .dn-note{font-size:10.5px;margin:6px 0;color:#222;}
+  .dn-table{width:100%;border-collapse:collapse;margin:6px 0 8px;font-size:11px;}
+  .dn-table th,.dn-table td{border:1px solid #000;padding:4px 8px;text-align:center;}
+  .dn-table th{background:#f0f0f0;}
+  .dn-cutline{text-align:center;font-size:9px;color:#888;letter-spacing:1px;margin:2px 0;}
+  @media print{
+    html,body{background:white!important;margin:0!important;padding:0!important;}
+    .dn-copy{page-break-inside:avoid;}
+    @page{size:A4;margin:10mm 8mm;}
+  }
+`;
+
+function previewDeliveryNote(){
+  document.getElementById('dn-preview-box').innerHTML=`<div style="width:210mm;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.4);"><style>${DN_STYLE}</style>${buildDeliveryNoteFullPage()}</div>`;
+  document.getElementById('dn-preview-card').style.display='block';
+  document.getElementById('dn-preview-card').scrollIntoView({behavior:'smooth'});
+  renderDNBarcodes(document.getElementById('dn-preview-box'));
+}
+
+function openDeliveryNotePrint(){
+  const pageHTML=buildDeliveryNoteFullPage();
+  const win=window.open('','_blank','width=900,height=700');
+  if(!win){toast('⚠️ Popup blocked! Browser mein popup allow karein.');return;}
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Delivery Note — Ahsin Agri Farm</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></scr` + `ipt>
+  <style>${DN_STYLE}
+  body{background:#1e2e22;padding:20px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .topbar{width:210mm;background:#1a3a2a;border:1px solid #40916c;border-radius:8px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;}
+  .topbar-title{color:#95d5b2;font-size:14px;font-weight:700;}
+  .tb-btn{padding:8px 18px;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;}
+  .btn-print{background:#40916c;color:#fff;}.btn-close{background:#555;color:#eee;margin-left:8px;}
+  .dn-page{width:210mm;background:#fff;}
+  @media print{.topbar{display:none!important;}}
+  </style>
+  </head><body>
+  <div class="topbar"><div class="topbar-title">🚚 Delivery Note — Ahsin Agri Farm (3 copies)</div>
+  <div><button class="tb-btn btn-print" onclick="window.print()">🖨 Print</button><button class="tb-btn btn-close" onclick="window.close()">✕ Close</button></div></div>
+  <div class="dn-page">${pageHTML}</div>
+  <script>
+    window.addEventListener('load',function(){
+      setTimeout(function(){
+        try{
+          document.querySelectorAll('.dn-barcode').forEach(function(el){
+            var val=el.getAttribute('data-value')||'AAF-000';
+            if(typeof JsBarcode!=='undefined'){
+              JsBarcode(el,val,{format:'CODE128',displayValue:true,fontSize:9,height:32,width:1.4,margin:0,background:'#ffffff',lineColor:'#000000'});
+            }
+          });
+        }catch(e){}
+        setTimeout(function(){window.print();},250);
+      },300);
+    });
+  <\\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+function clearDeliveryForm(){
+  ['dn-no','dn-date','dn-branch','dn-temp','dn-boxes','dn-kgs','dn-trace'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('dn-customer').value='Anchor Commodities Pvt Ltd.';
+  document.getElementById('dn-city').value='Lahore';
+  document.getElementById('dn-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('dn-lettuce-selected').childNodes[0].nodeValue='— Koi record select karein —';
+  document.getElementById('dn-lettuce-id').value='';
+  document.getElementById('dn-preview-card').style.display='none';
+  cancelDeliveryEdit(true);
+  toast('✅ Delivery Note form clear!');
+}
+function initDeliveryNoteDefaults(){
+  const dateEl=document.getElementById('dn-date');
+  const cityEl=document.getElementById('dn-city');
+  if(dateEl && !dateEl.value)dateEl.value=new Date().toISOString().slice(0,10);
+  if(cityEl && !cityEl.value)cityEl.value='Lahore';
+}
+document.addEventListener('DOMContentLoaded', initDeliveryNoteDefaults);
+initDeliveryNoteDefaults();
+
+// ══════════════════════════════════════
+// DELIVERY NOTE — SAVE / EDIT / DELETE / DOWNLOAD
+// ══════════════════════════════════════
+let dnEditId=null;
+
+function saveDeliveryNote(){
+  const d=gatherDeliveryFormData();
+  if(!d.no && !d.trace){toast('⚠️ Kam az kam Delivery No. ya Traceability No. bharein!');return;}
+  const all=load(KEYS.delivery);
+  if(dnEditId){
+    const idx=all.findIndex(r=>r.id===dnEditId);
+    if(idx>-1){ all[idx]={...d,id:dnEditId}; }
+    save(KEYS.delivery,all);
+    toast('✅ Delivery Note update ho gaya!');
+    cancelDeliveryEdit(true);
+  } else {
+    const rec={...d,id:Date.now()};
+    all.push(rec);
+    save(KEYS.delivery,all);
+    toast('✅ Delivery Note save ho gaya!');
+  }
+  renderDeliveryTable();
+}
+
+function renderDeliveryTable(){
+  const tbody=document.getElementById('delivery-tbody');
+  if(!tbody)return;
+  const records=load(KEYS.delivery).sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0));
+  const qEl=document.getElementById('dn-search');
+  const q=(qEl?qEl.value:'').toLowerCase();
+  const filtered=records.filter(r=>[r.no,r.date,r.customer,r.trace].some(v=>(v||'').toLowerCase().includes(q)));
+  const countEl=document.getElementById('dn-count');
+  if(countEl)countEl.textContent=`${filtered.length} record(s)`;
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" class="empty-msg">No records found.</td></tr>';return;}
+  tbody.innerHTML=filtered.map((r,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${r.no||'—'}</td>
+      <td style="white-space:nowrap;min-width:96px;">${fmtDMY(r.date)}</td>
+      <td>${r.customer||'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--mint);">${r.trace||'—'}</td>
+      <td>${r.boxes||'—'}</td>
+      <td>${r.kgs||'—'}</td>
+      <td><div class="action-row">
+        <button class="btn-sm btn-sm-view" onclick="viewDeliveryRecord(${r.id})">👁 View</button>
+        <button class="btn-sm" style="background:rgba(46,156,212,0.12);color:#2e9cd4;border:1px solid rgba(46,156,212,0.3);" onclick="downloadDeliveryNote(${r.id})">📥 PDF</button>
+        <button class="btn-sm btn-sm-edit" onclick="editDeliveryRecord(${r.id})">✏</button>
+        <button class="btn-sm btn-sm-del" onclick="deleteDeliveryRecord(${r.id})">🗑</button>
+      </div></td>
+    </tr>`).join('');
+}
+
+function viewDeliveryRecord(id){
+  const r=load(KEYS.delivery).find(x=>x.id===id);if(!r)return;
+  document.getElementById('modal-title').textContent='🚚 Delivery Note — '+(r.no||r.trace||'');
+  document.getElementById('modal-body').innerHTML=`<div class="record-view">
+    ${rv('Delivery Note No.',r.no)}${rv('Date',fmtDMY(r.date))}
+    ${rv("Customer's Name",r.customer)}${rv('City',r.city)}
+    ${rv('Branch',r.branch)}${rv('Temp. °C',r.temp)}
+    ${rv('Box/Boxes',r.boxes)}${rv('Kgs.',r.kgs)}
+    ${rv('Traceability No.',r.trace)}
+  </div>`;
+  document.getElementById('view-modal').classList.add('open');
+}
+
+function editDeliveryRecord(id){
+  const r=load(KEYS.delivery).find(x=>x.id===id);if(!r)return;
+  document.getElementById('dn-no').value=r.no||'';
+  document.getElementById('dn-date').value=r.date||'';
+  document.getElementById('dn-customer').value=r.customer||'';
+  document.getElementById('dn-city').value=r.city||'';
+  document.getElementById('dn-branch').value=r.branch||'';
+  document.getElementById('dn-temp').value=r.temp||'';
+  document.getElementById('dn-boxes').value=r.boxes||'';
+  document.getElementById('dn-kgs').value=r.kgs||'';
+  document.getElementById('dn-trace').value=r.trace||'';
+  dnEditId=id;
+  const btn=document.querySelector('#panel-delivery .form-actions .btn-primary');
+  if(btn){btn.textContent='💾 Update Record';}
+  const cancelBtn=document.getElementById('btn-cancel-delivery');
+  if(cancelBtn)cancelBtn.style.display='';
+  window.scrollTo({top:0,behavior:'smooth'});
+  toast('📝 Edit mode. Changes kar ke Update karein.');
+}
+
+function cancelDeliveryEdit(silent){
+  dnEditId=null;
+  const btn=document.querySelector('#panel-delivery .form-actions .btn-primary');
+  if(btn)btn.textContent='💾 Save Record';
+  const cancelBtn=document.getElementById('btn-cancel-delivery');
+  if(cancelBtn)cancelBtn.style.display='none';
+  if(!silent)toast('✖ Edit cancelled.');
+}
+
+function deleteDeliveryRecord(id){
+  if(!confirm('Is Delivery Note ko delete karna chahte ho?'))return;
+  const all=load(KEYS.delivery);
+  save(KEYS.delivery,all.filter(r=>r.id!==id));
+  renderDeliveryTable();
+  toast('🗑 Delivery Note delete ho gaya!');
+}
+
+function downloadDeliveryNote(id){
+  const r=load(KEYS.delivery).find(x=>x.id===id);if(!r)return;
+  const pageHTML=buildDeliveryNoteFullPage(r);
+  const container=document.createElement('div');
+  container.style.width='210mm';
+  container.style.position='absolute';
+  container.style.top='-9999px';
+  container.style.left='-9999px';
+  container.innerHTML=`<style>${DN_STYLE}</style><div class="dn-page">${pageHTML}</div>`;
+  document.body.appendChild(container);
+  renderDNBarcodes(container);
+  toast('Generating PDF... Please wait.');
+  const opt={
+    margin:[8,6,8,6],
+    filename:'DeliveryNote_'+(r.no||r.trace||id)+'.pdf',
+    image:{type:'jpeg',quality:0.98},
+    html2canvas:{scale:2,useCORS:true},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
+  };
+  setTimeout(()=>{
+    html2pdf().set(opt).from(container).save().then(()=>{
+      document.body.removeChild(container);
+      toast('✅ Delivery Note PDF Downloaded!');
+    }).catch(err=>{
+      console.error(err);
+      document.body.removeChild(container);
+      toast('❌ Error generating PDF!');
+    });
+  },150);
+}
+
+// Close delivery-note dropdown outside click
+document.addEventListener('click',function(e){
+  const panel=document.getElementById('dn-lettuce-panel');
+  const sel=document.getElementById('dn-lettuce-selected');
   if(panel&&sel&&!sel.contains(e.target)&&!panel.contains(e.target))panel.style.display='none';
 });
 
