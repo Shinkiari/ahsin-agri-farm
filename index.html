@@ -2561,13 +2561,23 @@ document.addEventListener('DOMContentLoaded',function(){
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
-          <input type="text" id="inv-search" placeholder="🔍 Search by invoice no, customer, date, amount..." oninput="renderSavedInvoices()" style="flex:1;min-width:200px;padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:13px;outline:none;">
+          <input type="text" id="inv-search" placeholder="🔍 Search by invoice no, customer, date, amount..." oninput="invResetPageAndRender()" style="flex:1;min-width:200px;padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:13px;outline:none;">
           <select id="inv-sort" onchange="renderSavedInvoices()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:12px;outline:none;">
             <option value="oldest">📅 Oldest First</option>
             <option value="newest">📅 Newest First</option>
             <option value="highest">💰 Highest Amount</option>
             <option value="lowest">💰 Lowest Amount</option>
           </select>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
+          <div style="display:flex;gap:6px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--r);padding:4px;">
+            <button type="button" id="inv-flt-all" class="btn-sm" style="font-size:12px;padding:6px 12px;background:transparent;color:var(--text2);border:none;border-radius:6px;" onclick="invSetTypeFilter('all')">📊 Overall</button>
+            <button type="button" id="inv-flt-daily" class="btn-sm" style="font-size:12px;padding:6px 12px;background:var(--sage3);color:#0f1f17;font-weight:700;border:none;border-radius:6px;" onclick="invSetTypeFilter('daily')">📅 Daily</button>
+            <button type="button" id="inv-flt-monthly" class="btn-sm" style="font-size:12px;padding:6px 12px;background:transparent;color:var(--text2);border:none;border-radius:6px;" onclick="invSetTypeFilter('monthly')">🗓 Monthly</button>
+          </div>
+          <input type="date" id="inv-date-filter" style="display:inline-block;padding:6px 10px;border:1.5px solid var(--sage3);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:12px;outline:none;" onchange="invResetPageAndRender()">
+          <input type="month" id="inv-month-filter" style="display:none;padding:6px 10px;border:1.5px solid var(--sage3);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:12px;outline:none;" onchange="invResetPageAndRender()">
+          <button type="button" id="inv-flt-clear" class="btn btn-outline" style="display:inline-block;font-size:12px;padding:6px 12px;" onclick="invClearDateFilter()">✖ Clear Date</button>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
           <button class="btn btn-primary" style="font-size:12px;padding:6px 14px;background:linear-gradient(135deg,#1565c0,#1976d2);border-color:#1976d2;" onclick="downloadAllInvoicesPDF()">⬇ Sab Invoices PDF Download</button>
@@ -2588,6 +2598,7 @@ document.addEventListener('DOMContentLoaded',function(){
             </tbody>
           </table>
         </div>
+        <div id="inv-pagination" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px;"></div>
       </div>
     </div>
 
@@ -7423,6 +7434,46 @@ function saveInvoice(){
   toast('✅ Invoice saved: '+invNo);
   autoCheckpoint();
 }
+let invCurrentPage=1;
+const INV_PAGE_SIZE=8;
+let invTypeFilter='daily';
+function invResetPageAndRender(){invCurrentPage=1;renderSavedInvoices();}
+function invSetTypeFilter(type){
+  invTypeFilter=type;
+  invCurrentPage=1;
+  const dateEl=document.getElementById('inv-date-filter');
+  const monthEl=document.getElementById('inv-month-filter');
+  const clearBtn=document.getElementById('inv-flt-clear');
+  ['all','daily','monthly'].forEach(t=>{
+    const btn=document.getElementById('inv-flt-'+t);
+    if(!btn)return;
+    if(t===type){btn.style.background='var(--sage3)';btn.style.color='#0f1f17';btn.style.fontWeight='700';}
+    else{btn.style.background='transparent';btn.style.color='var(--text2)';btn.style.fontWeight='400';}
+  });
+  if(type==='daily'){
+    if(dateEl){dateEl.style.display='inline-block';if(!dateEl.value)dateEl.value=new Date().toISOString().slice(0,10);}
+    if(monthEl)monthEl.style.display='none';
+    if(clearBtn)clearBtn.style.display='inline-block';
+  }else if(type==='monthly'){
+    if(monthEl){monthEl.style.display='inline-block';if(!monthEl.value)monthEl.value=new Date().toISOString().slice(0,7);}
+    if(dateEl)dateEl.style.display='none';
+    if(clearBtn)clearBtn.style.display='inline-block';
+  }else{
+    if(dateEl)dateEl.style.display='none';
+    if(monthEl)monthEl.style.display='none';
+    if(clearBtn)clearBtn.style.display='none';
+    const sortEl=document.getElementById('inv-sort');
+    if(sortEl)sortEl.value='newest';
+  }
+  renderSavedInvoices();
+}
+function invClearDateFilter(){
+  const dateEl=document.getElementById('inv-date-filter');if(dateEl)dateEl.value='';
+  const monthEl=document.getElementById('inv-month-filter');if(monthEl)monthEl.value='';
+  invCurrentPage=1;
+  renderSavedInvoices();
+}
+function invGoToPage(p){invCurrentPage=p;renderSavedInvoices();document.getElementById('inv-tbody').scrollIntoView({behavior:'smooth',block:'nearest'});}
 function renderSavedInvoices(){
   let invoices=load(KEYS.invoice);
   // Sort by date first always
@@ -7432,6 +7483,18 @@ function renderSavedInvoices(){
   else if(sortVal==='newest') invoices=[...invoices].sort((a,b)=>(b.from||'').localeCompare(a.from||''));
   else if(sortVal==='highest') invoices=[...invoices].sort((a,b)=>(parseFloat(b.totalAmount)||0)-(parseFloat(a.totalAmount)||0));
   else if(sortVal==='lowest') invoices=[...invoices].sort((a,b)=>(parseFloat(a.totalAmount)||0)-(parseFloat(b.totalAmount)||0));
+  // Type filter (Daily / Monthly / Overall)
+  if(invTypeFilter==='daily'){
+    invoices=invoices.filter(inv=>inv.type==='daily');
+    const dateEl=document.getElementById('inv-date-filter');
+    const dateVal=dateEl?dateEl.value:'';
+    if(dateVal) invoices=invoices.filter(inv=>inv.from===dateVal);
+  }else if(invTypeFilter==='monthly'){
+    invoices=invoices.filter(inv=>inv.type==='monthly');
+    const monthEl=document.getElementById('inv-month-filter');
+    const monthVal=monthEl?monthEl.value:'';
+    if(monthVal) invoices=invoices.filter(inv=>(inv.from||'').slice(0,7)===monthVal);
+  }
   // Search
   const searchEl=document.getElementById('inv-search');
   const q=(searchEl?searchEl.value:'').toLowerCase().trim();
@@ -7442,11 +7505,41 @@ function renderSavedInvoices(){
       return [inv.invNo,inv.label,inv.customers,inv.from,inv.to,inv.type,amt,traces].some(v=>(v||'').toLowerCase().includes(q));
     });
   }
-  const countEl=document.getElementById('inv-saved-count');if(countEl)countEl.textContent=`${invoices.length} invoice(s)${q?' (filtered)':''}`;
+  const totalFiltered=invoices.length;
+  const countEl=document.getElementById('inv-saved-count');if(countEl)countEl.textContent=`${totalFiltered} invoice(s)${(q||invTypeFilter!=='all')?' (filtered)':''}`;
   const tbody=document.getElementById('inv-tbody');if(!tbody)return;
-  if(!invoices.length){tbody.innerHTML='<tr><td colspan="11" class="empty-msg">'+(q?'No results found. 🔍':'No saved invoices.')+'</td></tr>';return;}
+  const pagEl=document.getElementById('inv-pagination');
+  if(!invoices.length){
+    tbody.innerHTML='<tr><td colspan="11" class="empty-msg">'+(q||invTypeFilter!=='all'?'No results found. 🔍':'No saved invoices.')+'</td></tr>';
+    if(pagEl)pagEl.innerHTML='';
+    return;
+  }
+  // Pagination
+  const totalPages=Math.max(1,Math.ceil(totalFiltered/INV_PAGE_SIZE));
+  if(invCurrentPage>totalPages)invCurrentPage=totalPages;
+  if(invCurrentPage<1)invCurrentPage=1;
+  const startIdx=(invCurrentPage-1)*INV_PAGE_SIZE;
+  const pageInvoices=invoices.slice(startIdx,startIdx+INV_PAGE_SIZE);
+  if(pagEl){
+    if(totalPages<=1){pagEl.innerHTML='';}
+    else{
+      let html='';
+      html+=`<button class="btn-sm" style="padding:6px 12px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text2);border-radius:6px;${invCurrentPage===1?'opacity:0.4;cursor:default;':'cursor:pointer;'}" ${invCurrentPage===1?'disabled':''} onclick="invGoToPage(${invCurrentPage-1})">◀ Prev</button>`;
+      const maxBtns=7;
+      let startP=Math.max(1,invCurrentPage-3),endP=Math.min(totalPages,startP+maxBtns-1);
+      startP=Math.max(1,endP-maxBtns+1);
+      if(startP>1)html+=`<span style="color:var(--text3);padding:0 4px;">…</span>`;
+      for(let p=startP;p<=endP;p++){
+        html+=`<button class="btn-sm" style="padding:6px 12px;border-radius:6px;border:1.5px solid ${p===invCurrentPage?'var(--sage3)':'var(--border)'};background:${p===invCurrentPage?'var(--sage3)':'var(--surface2)'};color:${p===invCurrentPage?'#0f1f17':'var(--text2)'};font-weight:${p===invCurrentPage?'700':'400'};cursor:pointer;" onclick="invGoToPage(${p})">${p}</button>`;
+      }
+      if(endP<totalPages)html+=`<span style="color:var(--text3);padding:0 4px;">…</span>`;
+      html+=`<button class="btn-sm" style="padding:6px 12px;background:var(--surface2);border:1.5px solid var(--border);color:var(--text2);border-radius:6px;${invCurrentPage===totalPages?'opacity:0.4;cursor:default;':'cursor:pointer;'}" ${invCurrentPage===totalPages?'disabled':''} onclick="invGoToPage(${invCurrentPage+1})">Next ▶</button>`;
+      html+=`<span style="color:var(--text3);font-size:12px;margin-left:8px;">Page ${invCurrentPage} of ${totalPages}</span>`;
+      pagEl.innerHTML=html;
+    }
+  }
   const typeLabel={daily:'📅 Daily',weekly:'📆 Weekly',monthly:'🗓 Monthly',custom:'✏ Custom'};
-  tbody.innerHTML=invoices.map((inv,i)=>{
+  tbody.innerHTML=pageInvoices.map((inv,i)=>{
     const grossWt=parseFloat(inv.totalWt)||0,netWt=parseFloat(inv.totalNetWt)||0,rate=parseFloat(inv.rate)||0;
     const useWt=netWt>0?netWt:grossWt;
     const amt=rate>0?(useWt*rate):(parseFloat(inv.totalAmount)||0);
@@ -8447,6 +8540,7 @@ function init(){
   document.getElementById('l-customer').value='Anchor Commodities Pvt Ltd';
   document.getElementById('l-temp').value='4';
   const qd=document.getElementById('q-date');if(qd)qd.value=today;
+  const invDateFlt=document.getElementById('inv-date-filter');if(invDateFlt&&!invDateFlt.value)invDateFlt.value=today;
   document.getElementById('inv-date').value=today;
   const thisMonth=today.slice(0,7);
   document.getElementById('inv-month').value=thisMonth;
