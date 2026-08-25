@@ -1583,6 +1583,25 @@ function hideSyncBadge(){
   if(el) el.style.display='none';
 }
 
+// Page band/refresh hone se pehle agar koi save Firebase ko bhejni baaki ho (1.5s
+// wale batch-delay ki wajah se) to usay FORCE kar ke turant (synchronous) bhej do.
+// Warna refresh hote hi purana cloud data naye local save ko overwrite kar deta hai.
+function _fbFlushSync(){
+  if(!Object.keys(_fbQueue).length) return;
+  try{
+    var patch = JSON.stringify(_fbQueue);
+    _fbQueue = {};
+    clearTimeout(_fbTimer);
+    var xhr = new XMLHttpRequest();
+    xhr.open('PATCH', FB_DB+'/'+FB_NODE+'.json', false); // false = synchronous, taake unload se pehle complete ho
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.send(patch);
+  }catch(e){ /* best effort */ }
+}
+window.addEventListener('beforeunload', _fbFlushSync);
+window.addEventListener('pagehide', _fbFlushSync);
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden') _fbFlushSync(); });
+
 // Auto-sync when page already has session
 document.addEventListener('DOMContentLoaded',function(){
   if(sessionStorage.getItem('agri_auth')==='yes'){
@@ -4118,9 +4137,9 @@ function saveFumigation(isEdit=false,editId=null){
   };
   if(!rec.traceNo&&!rec.seedingDate){toast('⚠️ Trace Number ya Seeding Date zaroor bharein!');return;}
   if(rec.traceNo){
-    const _baseOfTrace=t=>(t||'').trim().replace(/-(\d{3})$/,'');
-    const recBase=_baseOfTrace(rec.traceNo);
-    const dupIdx=records.findIndex(r=>r.id!==rec.id && (r.traceNo===rec.traceNo || (recBase && _baseOfTrace(r.traceNo)===recBase)));
+    // Sirf EXACT traceNo match ko duplicate maano — base (suffix se pehle wala hissa)
+    // match karne se ek hi din ki 2nd/3rd supply ki fumigation ghalati se reject ho jati thi.
+    const dupIdx=records.findIndex(r=>r.id!==rec.id && r.traceNo===rec.traceNo);
     if(dupIdx!==-1){
       toast('❌ Yeh Traceability Number ('+rec.traceNo+') pehle se Fumigation mein exist karta hai! Duplicate save nahi ho sakta.');
       return;
@@ -5525,38 +5544,49 @@ function resequenceTraces(){
   const baseOf=t=>(t||'').replace(/-(\d{3})$/,'');
   // Lettuce harvest-date order — yahi master sequence banegi
   const sorted=let_.slice().filter(r=>r.traceNo).sort((a,b)=>(a.harvestDate||a.supplyDate||'').localeCompare(b.harvestDate||b.supplyDate||'')||(a.id-b.id));
-  const baseToNum={};
+  // Kitni lettuce supplies ek hi base (date+plot) share karti hain — agar 1 se zyada hain
+  // (ek din mein multiple supply), to sirf EXACT old-traceNo match par linking karo, base
+  // par nahi, warna sab ek hi naye number par collide ho kar overwrite ho jate hain.
+  const baseCount={};
+  sorted.forEach(r=>{const b=baseOf(r.traceNo);baseCount[b]=(baseCount[b]||0)+1;});
+  const baseToNum={};      // base -> num (sirf tab bharosemand jab base par ek hi supply ho)
+  const oldTraceToNew={};  // EXACT old traceNo -> new traceNo (hamesha bharosemand, collision-free)
   sorted.forEach((r,i)=>{
     const num=String(i+1).padStart(3,'0');
-    baseToNum[baseOf(r.traceNo)]=num;
-    r.traceNo=baseOf(r.traceNo)+'-'+num;
+    const b=baseOf(r.traceNo);
+    const oldTrace=r.traceNo;
+    const newTrace=b+'-'+num;
+    oldTraceToNew[oldTrace]=newTrace;
+    baseToNum[b]=num;
+    r.traceNo=newTrace;
   });
   // Lettuce save
   const lmap={};sorted.forEach(r=>lmap[String(r.id)]=r);
   let_=let_.map(r=>lmap[String(r.id)]||r);
   save(KEYS.lettuce,let_);
-  // Old base -> new traceNo map (linked records update karne ke liye)
+  // Old base -> new traceNo map (sirf single-supply bases ke liye fallback)
   const oldBaseToNew={};
-  Object.keys(baseToNum).forEach(b=>{oldBaseToNew[b]=b+'-'+baseToNum[b];});
-  // Fumigation — matching base se same number do; agar match na ho to apni harvest-order se
+  Object.keys(baseToNum).forEach(b=>{if(baseCount[b]===1)oldBaseToNew[b]=b+'-'+baseToNum[b];});
+  // Fumigation — pehle EXACT old traceNo se match karo (collision-free), warna base se
+  // (sirf jab us base par ek hi lettuce supply ho), warna apni harvest-order se
   if(fum.length){
     let nextFree=sorted.length;
     const fSorted=fum.slice().filter(r=>r.traceNo).sort((a,b)=>(a.harvestingDate||a.seedingDate||'').localeCompare(b.harvestingDate||b.seedingDate||'')||(a.id-b.id));
     fSorted.forEach(r=>{
       const b=baseOf(r.traceNo);
-      if(baseToNum[b]){r.traceNo=b+'-'+baseToNum[b];}
+      if(oldTraceToNew[r.traceNo]){r.traceNo=oldTraceToNew[r.traceNo];}
+      else if(baseCount[b]===1&&baseToNum[b]){r.traceNo=b+'-'+baseToNum[b];}
       else{nextFree++;const num=String(nextFree).padStart(3,'0');r.traceNo=b+'-'+num;}
     });
     const fmap={};fSorted.forEach(r=>fmap[String(r.id)]=r);
     fum=fum.map(r=>fmap[String(r.id)]||r);
     save(KEYS.fumigation,fum);
   }
-  // Linked records — QAR aur Basket Return ke traceNo bhi base se update karo
-  const baseOf2=t=>(t||'').replace(/-(\d{3})$/,'');
+  // Linked records — QAR aur Basket Return ke traceNo bhi update karo (exact match pehle)
   let qar=load(KEYS.qar);
-  if(qar.length){let ch=false;qar.forEach(q=>{if(q.traceNo){const nb=oldBaseToNew[baseOf2(q.traceNo)];if(nb&&nb!==q.traceNo){q.traceNo=nb;ch=true;}}});if(ch)save(KEYS.qar,qar);}
+  if(qar.length){let ch=false;qar.forEach(q=>{if(q.traceNo){const nb=oldTraceToNew[q.traceNo]||oldBaseToNew[baseOf(q.traceNo)];if(nb&&nb!==q.traceNo){q.traceNo=nb;ch=true;}}});if(ch)save(KEYS.qar,qar);}
   let br=load(KEYS.basketReturn);
-  if(br.length){let ch=false;br.forEach(b=>{if(b.trace){const nb=oldBaseToNew[baseOf2(b.trace)];if(nb&&nb!==b.trace){b.trace=nb;ch=true;}}});if(ch)save(KEYS.basketReturn,br);}
+  if(br.length){let ch=false;br.forEach(b=>{if(b.trace){const nb=oldTraceToNew[b.trace]||oldBaseToNew[baseOf(b.trace)];if(nb&&nb!==b.trace){b.trace=nb;ch=true;}}});if(ch)save(KEYS.basketReturn,br);}
 }
 
 // ══════════════════════════════════════
@@ -5595,10 +5625,19 @@ function populateLettuceFillDropdown(){
     fumTraces.delete(currentFumTrace.trim());
     fumBases.delete(_baseOfTrace(currentFumTrace));
   }
+  // Agar ek hi din/plot (same base) se 2+ ALAG supplies hain (jaise ek din mein 2-3 baar
+  // supply), to sirf base match par "fumigation ho chuki" mat maano — warna 1st supply ki
+  // fumigation ban jane par 2nd/3rd supply bhi "already done" dikha kar dropdown se ghayab
+  // ho jati hai. Base-fallback sirf tab lagao jab us base par sirf EK hi lettuce supply ho.
+  const baseCounts={};
+  allL.forEach(r=>{ if(r.traceNo){ const b=_baseOfTrace(r.traceNo); baseCounts[b]=(baseCounts[b]||0)+1; } });
   _lettuceAllRecords=allL.filter(r=>{
     if(!r.traceNo)return true;
     const t=r.traceNo.trim();
-    return !fumTraces.has(t) && !fumBases.has(_baseOfTrace(t));
+    const b=_baseOfTrace(t);
+    if(fumTraces.has(t))return false; // is exact supply ki fumigation pehle se ban chuki
+    if(baseCounts[b]>1)return true;   // same din/plot ki multiple supplies — sirf exact match par bharosa
+    return !fumBases.has(b);          // sirf ek hi supply is base par — purana suffix-shift fallback theek hai
   });
   renderLettuceDDItems('');
 }
