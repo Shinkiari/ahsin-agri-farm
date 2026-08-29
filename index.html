@@ -642,6 +642,13 @@ body {
 .search-bar-row input:focus { border-color: var(--sage3); }
 .search-bar-row input::placeholder { color: var(--text-dim); }
 .records-badge { font-size: 11px; color: var(--sage3); margin-bottom: 8px; font-family: var(--mono); opacity: 0.8; }
+.pagination-row { display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--border2); }
+.pg-btn { min-width:30px; height:30px; padding:0 8px; border-radius:7px; background:var(--surface2); border:1px solid var(--border); color:var(--text2); font-size:12px; font-weight:600; cursor:pointer; transition:.15s; font-family:var(--mono); }
+.pg-btn:hover:not(:disabled) { background:var(--surface3); border-color:var(--sage3); color:var(--text); }
+.pg-btn.active { background:var(--sage2); border-color:var(--sage3); color:#fff; }
+.pg-btn:disabled { opacity:0.35; cursor:not-allowed; }
+.pg-ellipsis { color:var(--text3); font-size:12px; padding:0 2px; }
+.pg-info { font-size:11px; color:var(--text3); margin-right:10px; font-family:var(--mono); }
 
 .table-wrap { overflow-x: auto; border-radius: var(--r); border: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 700px; }
@@ -2050,6 +2057,7 @@ document.addEventListener('DOMContentLoaded',function(){
             </tbody>
           </table>
         </div>
+        <div class="pagination-row" id="l-pagination"></div>
       </div>
     </div>
 
@@ -2177,6 +2185,7 @@ document.addEventListener('DOMContentLoaded',function(){
             </tbody>
           </table>
         </div>
+        <div class="pagination-row" id="f-pagination"></div>
       </div>
     </div>
 
@@ -2419,6 +2428,7 @@ document.addEventListener('DOMContentLoaded',function(){
             </tbody>
           </table>
         </div>
+        <div class="pagination-row" id="q-pagination"></div>
       </div>
     </div>
 
@@ -3290,6 +3300,46 @@ function closeSidebar(){
 // ══════════════════════════════════════
 const KEYS = { lettuce:'aaf_lettuce', fumigation:'aaf_fumigation', qar:'aaf_qar', invoice:'aaf_invoices', trash:'aaf_trash', rateHistory:'aaf_rate_history', basketReturn:'aaf_basket_return', farms:'aaf_farms', delivery:'aaf_delivery' };
 let currentRecord = null, currentRecordType = null;
+
+// ══════════════════════════════════════
+// PAGINATION (10 records per page)
+// ══════════════════════════════════════
+const PAGE_SIZE = 10;
+let lettucePageNum = 1, fumigationPageNum = 1, qarPageNum = 1;
+
+function paginate(containerId, totalItems, currentPage, onPageClick){
+  const el = document.getElementById(containerId);
+  if(!el) return currentPage;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  if(currentPage > totalPages) currentPage = totalPages;
+  if(currentPage < 1) currentPage = 1;
+  if(totalItems <= PAGE_SIZE){ el.innerHTML=''; return currentPage; }
+
+  const from = (currentPage-1)*PAGE_SIZE + 1;
+  const to = Math.min(currentPage*PAGE_SIZE, totalItems);
+
+  let pages = [];
+  pages.push(1);
+  for(let p=currentPage-1; p<=currentPage+1; p++){ if(p>1 && p<totalPages) pages.push(p); }
+  if(totalPages>1) pages.push(totalPages);
+  pages = [...new Set(pages)].sort((a,b)=>a-b);
+
+  let html = `<span class="pg-info">${from}–${to} of ${totalItems}</span>`;
+  html += `<button class="pg-btn" ${currentPage===1?'disabled':''} onclick="${onPageClick}(${currentPage-1})">‹ Prev</button>`;
+  let prev = 0;
+  pages.forEach(p=>{
+    if(prev && p-prev>1) html += `<span class="pg-ellipsis">…</span>`;
+    html += `<button class="pg-btn ${p===currentPage?'active':''}" onclick="${onPageClick}(${p})">${p}</button>`;
+    prev = p;
+  });
+  html += `<button class="pg-btn" ${currentPage===totalPages?'disabled':''} onclick="${onPageClick}(${currentPage+1})">Next ›</button>`;
+  el.innerHTML = html;
+  return currentPage;
+}
+
+function goToLettucePage(n){ lettucePageNum = n; renderLettuceTable(); }
+function goToFumigationPage(n){ fumigationPageNum = n; renderFumigationTable(); }
+function goToQarPage(n){ qarPageNum = n; renderQarTable(); }
 // ═══ DATABASE: LocalStorage + Firebase Cloud Sync ═══
 function load(k){
   try{ return JSON.parse(localStorage.getItem(k)||'[]'); }catch{ return []; }
@@ -3879,13 +3929,18 @@ function fmtDMY(dateStr){
 function renderLettuceTable(){
   const records=load(KEYS.lettuce).sort((a,b)=>{var d=(b.supplyDate||'').localeCompare(a.supplyDate||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});
   const q=(document.getElementById('l-search').value||'').toLowerCase();
+  if(window._lLastQuery===undefined) window._lLastQuery=q;
+  if(q!==window._lLastQuery){ lettucePageNum=1; window._lLastQuery=q; }
   const filtered=records.filter(r=>[r.traceNo,r.supplyDate,r.variety,r.customer,r.location].some(v=>(v||'').toLowerCase().includes(q)));
   document.getElementById('l-count').textContent=`${filtered.length} record(s)`;
   const tbody=document.getElementById('lettuce-tbody');
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="10" class="empty-msg">No records found.</td></tr>';return;}
-  tbody.innerHTML=filtered.map((r,i)=>`
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="10" class="empty-msg">No records found.</td></tr>';document.getElementById('l-pagination').innerHTML='';return;}
+  lettucePageNum = paginate('l-pagination', filtered.length, lettucePageNum, 'goToLettucePage');
+  const pageStart=(lettucePageNum-1)*PAGE_SIZE;
+  const pageItems=filtered.slice(pageStart, pageStart+PAGE_SIZE);
+  tbody.innerHTML=pageItems.map((r,i)=>`
     <tr>
-      <td>${i+1}</td>
+      <td>${pageStart+i+1}</td>
       <td style="white-space:nowrap;min-width:96px;">${fmtDMY(r.supplyDate)}</td>
       <td style="font-family:var(--mono);font-size:11px;color:var(--mint);">${r.traceNo||'—'}</td>
       <td>${r.variety||'—'}</td>
@@ -4184,22 +4239,27 @@ function clearFumigationForm(){
 function renderFumigationTable(){
   const records=load(KEYS.fumigation).sort((a,b)=>{var d=(b.harvestingDate||b.seedingDate||'').localeCompare(a.harvestingDate||a.seedingDate||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});
   const q=(document.getElementById('f-search').value||'').toLowerCase();
+  if(window._fLastQuery===undefined) window._fLastQuery=q;
+  if(q!==window._fLastQuery){ fumigationPageNum=1; window._fLastQuery=q; }
   const filtered=records.filter(r=>[r.traceNo,r.variety,r.seedingDate,r.harvestingDate].some(v=>(v||'').toLowerCase().includes(q)));
   document.getElementById('f-count').textContent=`${filtered.length} record(s)`;
   // dashboard + sidebar badge sync
   const sf=document.getElementById('stat-fumigation');const nb=document.getElementById('nb-fumigation');
   if(sf)sf.textContent=records.length;if(nb)nb.textContent=records.length;
   const tbody=document.getElementById('fumigation-tbody');
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" class="empty-msg">No records found.</td></tr>';return;}
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" class="empty-msg">No records found.</td></tr>';document.getElementById('f-pagination').innerHTML='';return;}
   const _farmsList=ensureDefaultFarms();
   function _getAcresForRecord(rec){
     const _p=getPlotFromTrace(rec.traceNo||'');
     if(_p){const _f=_farmsList.find(f=>f.plotCode.toUpperCase()===_p.toUpperCase());if(_f&&_f.acres)return _f.acres+' Acres';}
     return rec.area||'—';
   }
-  tbody.innerHTML=filtered.map((r,i)=>`
+  fumigationPageNum = paginate('f-pagination', filtered.length, fumigationPageNum, 'goToFumigationPage');
+  const pageStart=(fumigationPageNum-1)*PAGE_SIZE;
+  const pageItems=filtered.slice(pageStart, pageStart+PAGE_SIZE);
+  tbody.innerHTML=pageItems.map((r,i)=>`
     <tr>
-      <td>${i+1}</td>
+      <td>${pageStart+i+1}</td>
       <td style="font-family:var(--mono);font-size:11px;color:var(--mint);">${r.traceNo||'—'}</td>
       <td>${r.variety||'—'}</td>
       <td style="white-space:nowrap;min-width:96px;">${fmtDMY(r.seedingDate)}</td>
@@ -5915,13 +5975,19 @@ function clearQarForm(){
 }
 function renderQarTable(){
   const records=load(KEYS.qar).sort((a,b)=>{var d=(b.date||'').localeCompare(a.date||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});const q=(document.getElementById('q-search')?document.getElementById('q-search').value:'').toLowerCase();
+  if(window._qLastQuery===undefined) window._qLastQuery=q;
+  if(q!==window._qLastQuery){ qarPageNum=1; window._qLastQuery=q; }
   const filtered=records.filter(r=>[r.date,r.decision,r.remarks].some(v=>(v||'').toLowerCase().includes(q)));
   const countEl=document.getElementById('q-count');if(countEl)countEl.textContent=`${filtered.length} record(s)`;
   const tbody=document.getElementById('qar-tbody');if(!tbody)return;
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="5" class="empty-msg">No QAR records.</td></tr>';return;}
-  tbody.innerHTML=filtered.map((r,i)=>`
+  const qPagEl=document.getElementById('q-pagination');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="5" class="empty-msg">No QAR records.</td></tr>';if(qPagEl)qPagEl.innerHTML='';return;}
+  qarPageNum = paginate('q-pagination', filtered.length, qarPageNum, 'goToQarPage');
+  const pageStart=(qarPageNum-1)*PAGE_SIZE;
+  const pageItems=filtered.slice(pageStart, pageStart+PAGE_SIZE);
+  tbody.innerHTML=pageItems.map((r,i)=>`
     <tr>
-      <td>${i+1}</td>
+      <td>${pageStart+i+1}</td>
       <td style="white-space:nowrap;min-width:96px;">${fmtDMY(r.date)}</td>
       <td>${r.decision?`<span style="font-size:11px;font-weight:700;color:${r.decision==='Accepted'?'var(--mint)':'var(--red)'}">${r.decision}</span>`:'<span style="font-size:11px;font-weight:700;color:var(--sand)">—</span>'}</td>
       <td style="font-size:11px;color:var(--text2);">${r.remarks||'—'}</td>
