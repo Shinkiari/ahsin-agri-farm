@@ -2977,7 +2977,7 @@ document.addEventListener('DOMContentLoaded',function(){
       <div class="section-header">
         <div>
           <div class="section-title">🏷️ Label Print</div>
-          <div class="section-desc">TSC TTP-244 Pro (4" × 2") supply labels</div>
+          <div class="section-desc">TSC TTP-244 Pro supply labels — 4"×2", 3"×2", or custom size</div>
         </div>
       </div>
 
@@ -3021,6 +3021,24 @@ document.addEventListener('DOMContentLoaded',function(){
           <div class="form-group"><label>Copies</label><input type="number" id="lbl-copies" value="1" min="1" max="50" style="max-width:100px;"></div>
         </div>
 
+        <div class="autofill-box" style="margin-top:14px;">
+          <div class="autofill-box-title">📐 Label Size</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <select id="lbl-size-preset" onchange="onLabelSizePresetChange()" style="background:rgba(10,22,16,0.6);border:1px solid rgba(82,183,136,0.2);border-radius:var(--r);padding:9px 12px;color:var(--text);font-family:var(--font);font-size:13px;">
+              <option value="4x2">4" × 2" (TSC TTP-244 Pro default)</option>
+              <option value="3x2">3" × 2"</option>
+              <option value="custom">Custom size...</option>
+            </select>
+            <div id="lbl-custom-size-inputs" style="display:none;align-items:center;gap:8px;">
+              <input type="number" id="lbl-custom-w" placeholder="Width" step="0.1" min="0.5" max="12" style="max-width:90px;" oninput="onLabelCustomSizeChange()">
+              <span style="color:var(--text2);font-size:12px;">in ×</span>
+              <input type="number" id="lbl-custom-h" placeholder="Height" step="0.1" min="0.5" max="12" style="max-width:90px;" oninput="onLabelCustomSizeChange()">
+              <span style="color:var(--text2);font-size:12px;">in</span>
+            </div>
+            <span style="color:var(--sage3);font-size:11px;">Text auto-adjusts to fit the chosen size</span>
+          </div>
+        </div>
+
         <div class="form-actions" style="margin-top:18px;">
           <button class="btn btn-primary" onclick="openLabelPrint()">🖨 Print Labels</button>
           <button class="btn btn-outline" onclick="previewLabel()">👁 Preview</button>
@@ -3032,7 +3050,7 @@ document.addEventListener('DOMContentLoaded',function(){
       <div class="card" id="lbl-preview-card" style="display:none;">
         <div class="card-title">
           <div class="ct-icon">👁</div>
-          Label Preview (4"×2")
+          <span id="lbl-preview-title">Label Preview (4"×2")</span>
         </div>
         <div style="display:flex;justify-content:center;padding:20px 0;">
           <div id="lbl-preview-box"></div>
@@ -3926,12 +3944,49 @@ function fmtDMY(dateStr){
   return dateStr;
 }
 
+// ══════════════════════════════════════
+// SMART SEARCH — supports month-year queries like
+// "05-2026" or "2026-05" (matches whole month), plain
+// substrings of the date in either DD-MM-YYYY or
+// YYYY-MM-DD form, and normal text fields.
+// ══════════════════════════════════════
+function matchesDateQuery(rawDate, q){
+  if(!rawDate || !q) return false;
+  const parts = String(rawDate).split('-');
+  if(parts.length!==3) return String(rawDate).toLowerCase().includes(q);
+  const [y,m,d] = parts;
+  const dmy = `${d}-${m}-${y}`.toLowerCase();
+  const ymd = String(rawDate).toLowerCase();
+  if(dmy.includes(q) || ymd.includes(q)) return true;
+  // month-year style: "5-2026" / "05-2026" / "2026-5" / "2026/05" / "05 2026"
+  let mm=null, yy=null;
+  let mtc = q.match(/^\s*(\d{1,2})\s*[-/\s]\s*(\d{4})\s*$/);
+  if(mtc){ mm=mtc[1]; yy=mtc[2]; }
+  else{
+    mtc = q.match(/^\s*(\d{4})\s*[-/\s]\s*(\d{1,2})\s*$/);
+    if(mtc){ yy=mtc[1]; mm=mtc[2]; }
+  }
+  if(mm && yy){
+    if(parseInt(m,10)===parseInt(mm,10) && y===yy) return true;
+  }
+  // year-only query (4 digits): match whole year
+  if(/^\d{4}$/.test(q) && y===q) return true;
+  return false;
+}
+
+function smartRecordMatch(record, q, dateFields, textFields){
+  if(!q) return true;
+  for(const f of dateFields){ if(matchesDateQuery(record[f], q)) return true; }
+  for(const f of textFields){ if((record[f]||'').toLowerCase().includes(q)) return true; }
+  return false;
+}
+
 function renderLettuceTable(){
   const records=load(KEYS.lettuce).sort((a,b)=>{var d=(b.supplyDate||'').localeCompare(a.supplyDate||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});
   const q=(document.getElementById('l-search').value||'').toLowerCase();
   if(window._lLastQuery===undefined) window._lLastQuery=q;
   if(q!==window._lLastQuery){ lettucePageNum=1; window._lLastQuery=q; }
-  const filtered=records.filter(r=>[r.traceNo,r.supplyDate,r.variety,r.customer,r.location].some(v=>(v||'').toLowerCase().includes(q)));
+  const filtered=records.filter(r=>smartRecordMatch(r,q,['supplyDate'],['traceNo','variety','customer','location']));
   document.getElementById('l-count').textContent=`${filtered.length} record(s)`;
   const tbody=document.getElementById('lettuce-tbody');
   if(!filtered.length){tbody.innerHTML='<tr><td colspan="10" class="empty-msg">No records found.</td></tr>';document.getElementById('l-pagination').innerHTML='';return;}
@@ -4241,7 +4296,7 @@ function renderFumigationTable(){
   const q=(document.getElementById('f-search').value||'').toLowerCase();
   if(window._fLastQuery===undefined) window._fLastQuery=q;
   if(q!==window._fLastQuery){ fumigationPageNum=1; window._fLastQuery=q; }
-  const filtered=records.filter(r=>[r.traceNo,r.variety,r.seedingDate,r.harvestingDate].some(v=>(v||'').toLowerCase().includes(q)));
+  const filtered=records.filter(r=>smartRecordMatch(r,q,['seedingDate','harvestingDate'],['traceNo','variety']));
   document.getElementById('f-count').textContent=`${filtered.length} record(s)`;
   // dashboard + sidebar badge sync
   const sf=document.getElementById('stat-fumigation');const nb=document.getElementById('nb-fumigation');
@@ -5977,7 +6032,7 @@ function renderQarTable(){
   const records=load(KEYS.qar).sort((a,b)=>{var d=(b.date||'').localeCompare(a.date||'');return d!==0?d:(Number(b.id)||0)-(Number(a.id)||0);});const q=(document.getElementById('q-search')?document.getElementById('q-search').value:'').toLowerCase();
   if(window._qLastQuery===undefined) window._qLastQuery=q;
   if(q!==window._qLastQuery){ qarPageNum=1; window._qLastQuery=q; }
-  const filtered=records.filter(r=>[r.date,r.decision,r.remarks].some(v=>(v||'').toLowerCase().includes(q)));
+  const filtered=records.filter(r=>smartRecordMatch(r,q,['date'],['decision','remarks']));
   const countEl=document.getElementById('q-count');if(countEl)countEl.textContent=`${filtered.length} record(s)`;
   const tbody=document.getElementById('qar-tbody');if(!tbody)return;
   const qPagEl=document.getElementById('q-pagination');
@@ -8136,6 +8191,37 @@ function autoFillLabelFromLettuce(){
   toast('✅ Label fields fill ho gayi!');
 }
 
+// ══════════════════════════════════════
+// LABEL SIZE — manual size support (default 4"x2", also 3"x2" or custom),
+// with text that auto-scales to fit the chosen size.
+// ══════════════════════════════════════
+function getLabelSize(){
+  const preset=document.getElementById('lbl-size-preset').value;
+  if(preset==='4x2') return {w:4,h:2};
+  if(preset==='3x2') return {w:3,h:2};
+  // custom
+  let w=parseFloat(document.getElementById('lbl-custom-w').value);
+  let h=parseFloat(document.getElementById('lbl-custom-h').value);
+  if(!w||w<=0)w=4;
+  if(!h||h<=0)h=2;
+  return {w:w,h:h};
+}
+
+function onLabelSizePresetChange(){
+  const preset=document.getElementById('lbl-size-preset').value;
+  const box=document.getElementById('lbl-custom-size-inputs');
+  box.style.display=preset==='custom'?'flex':'none';
+  if(preset==='custom'){
+    if(!document.getElementById('lbl-custom-w').value)document.getElementById('lbl-custom-w').value='4';
+    if(!document.getElementById('lbl-custom-h').value)document.getElementById('lbl-custom-h').value='2';
+  }
+  if(document.getElementById('lbl-preview-card').style.display!=='none')previewLabel();
+}
+
+function onLabelCustomSizeChange(){
+  if(document.getElementById('lbl-preview-card').style.display!=='none')previewLabel();
+}
+
 function buildLabelHTML(forPrint){
   const supplier=document.getElementById('lbl-supplier').value||'Ahsin Agri Farm';
   const customer=document.getElementById('lbl-customer').value||'—';
@@ -8144,13 +8230,21 @@ function buildLabelHTML(forPrint){
   const expiry=fmtDateLabel(document.getElementById('lbl-expiry').value);
   const trace=document.getElementById('lbl-trace').value||'—';
   const farm=document.getElementById('lbl-farm').value||'—';
-  const previewStyle='width:384px;height:192px;background:#fff;border:1.5px solid #999;font-family:Arial,Helvetica,sans-serif;padding:8px 12px;box-sizing:border-box;color:#000;box-shadow:0 4px 20px rgba(0,0,0,0.4);overflow:hidden;';
-  const printStyle='width:4in;height:2in;background:#fff;font-family:Arial,Helvetica,sans-serif;padding:0.08in 0.1in;box-sizing:border-box;color:#000;overflow:hidden;';
+  const size=getLabelSize();
+  // Scale font/spacing relative to the reference 4"x2" label (area-based, clamped)
+  const refArea=4*2;
+  let scale=Math.sqrt((size.w*size.h)/refArea);
+  scale=Math.max(0.55,Math.min(1.3,scale));
+  const PX_PER_IN=96;
+  const previewW=Math.round(size.w*PX_PER_IN);
+  const previewH=Math.round(size.h*PX_PER_IN);
+  const previewStyle=`width:${previewW}px;height:${previewH}px;background:#fff;border:1.5px solid #999;font-family:Arial,Helvetica,sans-serif;padding:${8*scale}px ${12*scale}px;box-sizing:border-box;color:#000;box-shadow:0 4px 20px rgba(0,0,0,0.4);overflow:hidden;`;
+  const printStyle=`width:${size.w}in;height:${size.h}in;background:#fff;font-family:Arial,Helvetica,sans-serif;padding:${(0.08*scale).toFixed(3)}in ${(0.1*scale).toFixed(3)}in;box-sizing:border-box;color:#000;overflow:hidden;`;
   const divStyle=forPrint?printStyle:previewStyle;
-  const fs=forPrint?'9.5pt':'10.5px';
+  const fs=forPrint?(9.5*scale).toFixed(2)+'pt':(10.5*scale).toFixed(2)+'px';
   const lh=forPrint?'1.48':'1.55';
-  const col1=forPrint?'1.35in':'135px';
-  function lrow(lbl,val){return `<tr><td style="font-weight:700;padding:1.2px 0;white-space:nowrap;overflow:hidden;">${lbl}</td><td style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${val}</td></tr>`;}
+  const col1=forPrint?(1.35*scale).toFixed(2)+'in':Math.round(135*scale)+'px';
+  function lrow(lbl,val){return `<tr><td style="font-weight:700;padding:${(1.2*scale).toFixed(2)}px 0;white-space:nowrap;overflow:hidden;">${lbl}</td><td style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${val}</td></tr>`;}
   return `<div style="${divStyle}"><table style="width:100%;border-collapse:collapse;font-size:${fs};line-height:${lh};table-layout:fixed;"><colgroup><col style="width:${col1};"><col></colgroup>
     ${lrow('Supplier:',supplier)}${lrow('Customers:',customer)}${lrow('Date of Harvesting:',harvest)}
     ${lrow('Date of Supply:',supply)}${lrow('Date of Expiry:',expiry)}${lrow('Traceability#:',trace)}${lrow('Farm:',farm)}
@@ -8158,13 +8252,16 @@ function buildLabelHTML(forPrint){
 }
 
 function previewLabel(){
+  const size=getLabelSize();
   document.getElementById('lbl-preview-box').innerHTML=buildLabelHTML(false);
+  document.getElementById('lbl-preview-title').textContent=`Label Preview (${size.w}"×${size.h}")`;
   document.getElementById('lbl-preview-card').style.display='block';
   document.getElementById('lbl-preview-card').scrollIntoView({behavior:'smooth'});
 }
 
 function openLabelPrint(){
   const copies=parseInt(document.getElementById('lbl-copies').value)||1;
+  const size=getLabelSize();
   const labelHTML=buildLabelHTML(true);
   const win=window.open('','_blank','width=700,height=500');
   if(!win){toast('⚠️ Popup blocked! Browser mein popup allow karein.');return;}
@@ -8178,10 +8275,10 @@ function openLabelPrint(){
   .btn-print{background:#40916c;color:#fff;}.btn-close{background:#555;color:#eee;margin-left:8px;}
   .label-wrap{margin-bottom:4px;}
   @media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}html,body{background:white!important;padding:0!important;margin:0!important;display:block;}
-  .topbar{display:none!important;}.label-wrap{display:block;width:4in;height:2in;page-break-after:always;overflow:hidden;margin:0!important;padding:0!important;}
-  .label-wrap:last-child{page-break-after:avoid;}@page{size:4in 2in;margin:0;}}</style>
+  .topbar{display:none!important;}.label-wrap{display:block;width:${size.w}in;height:${size.h}in;page-break-after:always;overflow:hidden;margin:0!important;padding:0!important;}
+  .label-wrap:last-child{page-break-after:avoid;}@page{size:${size.w}in ${size.h}in;margin:0;}}</style>
   </head><body>
-  <div class="topbar"><div><div class="topbar-title">🏷️ Label Print — Ahsin Agri Farm</div><div class="topbar-sub">TSC TTP-244 Pro · 4"×2" · ${copies} cop${copies===1?'y':'ies'}</div></div>
+  <div class="topbar"><div><div class="topbar-title">🏷️ Label Print — Ahsin Agri Farm</div><div class="topbar-sub">TSC TTP-244 Pro · ${size.w}"×${size.h}" · ${copies} cop${copies===1?'y':'ies'}</div></div>
   <div><button class="tb-btn btn-print" onclick="window.print()">🖨 Print</button><button class="tb-btn btn-close" onclick="window.close()">✕ Close</button></div></div>
   ${labelsHTML}
   <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},400);});<\/script>
@@ -8588,13 +8685,28 @@ function downloadLabelDocx(){
   const trace=document.getElementById('lbl-trace').value||'—';
   const farm=document.getElementById('lbl-farm').value||'—';
   const copies=parseInt(document.getElementById('lbl-copies').value)||1;
+  const size=getLabelSize();
+  // Scale relative to the reference 4"x2" label (area-based, clamped) — same logic as buildLabelHTML
+  const refArea=4*2;
+  let scale=Math.sqrt((size.w*size.h)/refArea);
+  scale=Math.max(0.55,Math.min(1.3,scale));
+  const TWIPS_PER_IN=1440;
+  const pgW=Math.round(size.w*TWIPS_PER_IN);
+  const pgH=Math.round(size.h*TWIPS_PER_IN);
+  const marLR=Math.round(187*scale); // left/right margin
+  const marT=Math.round(360*scale);
+  const marB=Math.round(187*scale);
+  const usableW=pgW-2*marLR;
+  const col1W=Math.round(usableW*(2520/5501));
+  const col2W=usableW-col1W;
+  const szVal=Math.round(22*scale); // half-points, base 11pt
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-  function makeRow(lbl,val){return '<w:tr><w:tc><w:tcPr><w:tcW w:w="2520" w:type="auto"/><w:tcBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/></w:tcBorders><w:tcMar><w:top w:w="20" w:type="dxa"/><w:left w:w="86" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t xml:space="preserve">'+esc(lbl)+'</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="2981" w:type="auto"/><w:tcBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/></w:tcBorders><w:tcMar><w:top w:w="20" w:type="dxa"/><w:left w:w="40" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="72" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t xml:space="preserve">'+esc(val)+'</w:t></w:r></w:p></w:tc></w:tr>';}
+  function makeRow(lbl,val){return '<w:tr><w:tc><w:tcPr><w:tcW w:w="'+col1W+'" w:type="dxa"/><w:tcBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/></w:tcBorders><w:tcMar><w:top w:w="20" w:type="dxa"/><w:left w:w="86" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="'+szVal+'"/><w:szCs w:val="'+szVal+'"/></w:rPr><w:t xml:space="preserve">'+esc(lbl)+'</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="'+col2W+'" w:type="dxa"/><w:tcBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/></w:tcBorders><w:tcMar><w:top w:w="20" w:type="dxa"/><w:left w:w="40" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="72" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="'+szVal+'"/><w:szCs w:val="'+szVal+'"/></w:rPr><w:t xml:space="preserve">'+esc(val)+'</w:t></w:r></w:p></w:tc></w:tr>';}
   const tblRows=makeRow('Supplier:',supplier)+makeRow('Customers:',customer)+makeRow('Date of Harvesting:',harvest)+makeRow('Date of Supply:',supply)+makeRow('Date of Expiry:',expiry)+makeRow('Traceability#:',trace)+makeRow('Farm:',farm);
-  const tblXML='<w:tbl><w:tblPr><w:tblW w:w="5501" w:type="dxa"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="2520"/><w:gridCol w:w="2981"/></w:tblGrid>'+tblRows+'</w:tbl>';
+  const tblXML='<w:tbl><w:tblPr><w:tblW w:w="'+usableW+'" w:type="dxa"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="'+col1W+'"/><w:gridCol w:w="'+col2W+'"/></w:tblGrid>'+tblRows+'</w:tbl>';
   let bodyContent='';
   for(let i=0;i<copies;i++){bodyContent+=tblXML;if(i<copies-1)bodyContent+='<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';}
-  const docXML='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+bodyContent+'<w:sectPr><w:pgSz w:w="5760" w:h="2880"/><w:pgMar w:top="360" w:right="72" w:bottom="187" w:left="187" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  const docXML='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+bodyContent+'<w:sectPr><w:pgSz w:w="'+pgW+'" w:h="'+pgH+'"/><w:pgMar w:top="'+marT+'" w:right="'+marLR+'" w:bottom="'+marB+'" w:left="'+marLR+'" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
   const stylesXML='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults></w:styles>';
   const ctXML='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>';
   const rootRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
