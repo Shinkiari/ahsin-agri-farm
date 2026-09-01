@@ -3835,6 +3835,11 @@ function saveLettuce(isEdit=false,editId=null){
   if(isEdit){const idx=records.findIndex(r=>r.id===editId);if(idx!==-1)records[idx]=rec;}
   else records.push(rec);
   save(KEYS.lettuce,records);
+  // Trace numbers pehle theek karo (harvest-date order), taake neeche invoice
+  // snapshot lete waqt SAHI (post-resequence) trace numbers capture hon —
+  // pehle ye baad mein chalta tha jis se invoice mein purana/duplicate number
+  // reh jata tha jab ek hi date ki 2 supplies add hoti thin.
+  try{resequenceTraces();}catch(e){console.error('resequenceTraces',e);}
   // Auto-save daily invoice and monthly invoice only (QAR manual hai)
   if(rec.supplyDate){
     try{autoSaveDailyInvoice(rec.supplyDate);}catch(e){console.error('autoSaveDailyInvoice',e);}
@@ -3842,7 +3847,6 @@ function saveLettuce(isEdit=false,editId=null){
   }
   // Weekly/Custom invoices jinme yeh record shamil hai unhe bhi latest data se sync karo
   try{refreshInvoicesContainingLettuceRecord(rec.id);}catch(e){console.error('refreshInvoicesContainingLettuceRecord',e);}
-  try{resequenceTraces();}catch(e){console.error('resequenceTraces',e);}
   try{resequenceInvoices();}catch(e){console.error('resequenceInvoices',e);}
   try{renderLettuceTable();}catch(e){console.error('renderLettuceTable',e);}
   try{renderSavedInvoices();}catch(e){console.error('renderSavedInvoices',e);}
